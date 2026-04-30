@@ -3,20 +3,16 @@
 import m from 'mithril';
 
 import {
-  ProviderType,
-  ProviderTuning,
   ProviderConfig,
   ProviderTemplate,
   ProviderPanelAttrs,
-  FormState,
   TYPE_ICONS,
   CATEGORY_LABELS,
-  CONNECTION_FIELD_LABELS,
   buildHeaders,
   apiUrl,
-  createEmptyForm,
 } from './provider_types';
 import {getTokens, STYLES as getStyles} from './provider_styles';
+import {ProviderForm} from './provider_form';
 
 export {ProviderPanelAttrs};
 
@@ -28,7 +24,6 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
   private success: string | null = null;
   private view_mode: 'list' | 'add' | 'edit' = 'list';
   private editingId: string | null = null;
-  private form: FormState = createEmptyForm();
   private testingId: string | null = null;
   private testResult: {success: boolean; latencyMs?: number; error?: string} | null = null;
   private deleting: string | null = null;
@@ -141,67 +136,9 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
     }
   }
 
-  private async saveProvider() {
-    const template = this.templates.find((t) => t.type === this.form.type);
-    const body: Record<string, unknown> = {
-      name: this.form.name,
-      type: this.form.type,
-      models: {
-        primary: this.form.models.primary || template?.defaultModels.primary || '',
-        light: this.form.models.light || template?.defaultModels.light || '',
-        ...(this.form.models.subAgent ? {subAgent: this.form.models.subAgent} : {}),
-      },
-      connection: this.form.connection,
-    };
-
-    if (this.form.showTuning && Object.keys(this.form.tuning).length > 0) {
-      body.tuning = this.form.tuning;
-    }
-
-    try {
-      let res: Response;
-      if (this.view_mode === 'edit' && this.editingId) {
-        res = await fetch(apiUrl(this.backendUrl, `/${this.editingId}`), {
-          method: 'PATCH',
-          headers: buildHeaders(this.apiKey),
-          body: JSON.stringify(body),
-        });
-      } else {
-        res = await fetch(apiUrl(this.backendUrl, ''), {
-          method: 'POST',
-          headers: buildHeaders(this.apiKey),
-          body: JSON.stringify(body),
-        });
-      }
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error((errData as {error?: string}).error || `Save failed: ${res.status}`);
-      }
-
-      this.success = this.view_mode === 'edit' ? 'Provider updated' : 'Provider created';
-      this.view_mode = 'list';
-      this.editingId = null;
-      this.form = createEmptyForm();
-      await this.loadData();
-      this.clearSuccessAfterDelay();
-    } catch (e: unknown) {
-      this.error = e instanceof Error ? e.message : 'Save failed';
-      m.redraw();
-    }
-  }
-
   private startEdit(provider: ProviderConfig) {
     this.view_mode = 'edit';
     this.editingId = provider.id;
-    this.form = {
-      name: provider.name,
-      type: provider.type,
-      models: {...provider.models},
-      connection: {...provider.connection},
-      tuning: provider.tuning ? {...provider.tuning} : {},
-      showTuning: !!provider.tuning && Object.keys(provider.tuning).length > 0,
-    };
     this.error = null;
     this.success = null;
     this.testResult = null;
@@ -211,25 +148,10 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
   private startAdd() {
     this.view_mode = 'add';
     this.editingId = null;
-    this.form = createEmptyForm();
     this.error = null;
     this.success = null;
     this.testResult = null;
-
-    const firstTemplate = this.templates[0];
-    if (firstTemplate) {
-      this.form.type = firstTemplate.type;
-      this.form.models = {...firstTemplate.defaultModels};
-    }
     m.redraw();
-  }
-
-  private cancelForm() {
-    this.view_mode = 'list';
-    this.editingId = null;
-    this.form = createEmptyForm();
-    this.error = null;
-    this.testResult = null;
   }
 
   private clearSuccessAfterDelay() {
@@ -239,18 +161,31 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
     }, 3000);
   }
 
-  private onTypeChange(type: ProviderType) {
-    this.form.type = type;
-    const template = this.templates.find((t) => t.type === type);
-    if (template) {
-      this.form.models = {...template.defaultModels};
-      this.form.connection = {};
-    }
-  }
-
   view(_vnode: m.Vnode<ProviderPanelAttrs>): m.Children {
     if (this.view_mode === 'add' || this.view_mode === 'edit') {
-      return this.renderForm();
+      const editProvider = this.view_mode === 'edit'
+        ? this.providers.find((p) => p.id === this.editingId)
+        : undefined;
+      return m(ProviderForm, {
+        backendUrl: this.backendUrl,
+        apiKey: this.apiKey,
+        editingProvider: editProvider,
+        templates: this.templates,
+        onSaved: () => {
+          this.success = this.view_mode === 'edit' ? 'Provider updated' : 'Provider created';
+          this.view_mode = 'list';
+          this.editingId = null;
+          this.loadData();
+          this.clearSuccessAfterDelay();
+        },
+        onCancel: () => {
+          this.view_mode = 'list';
+          this.editingId = null;
+          this.error = null;
+          this.testResult = null;
+          m.redraw();
+        },
+      });
     }
     return this.renderList();
   }
@@ -395,255 +330,6 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
       this.testResult.success
         ? m('span', `✅ Connection successful${this.testResult.latencyMs ? ` (${this.testResult.latencyMs}ms)` : ''}`)
         : m('span', `❌ Connection failed: ${this.testResult.error || 'Unknown error'}`),
-    ]);
-  }
-
-  private renderForm(): m.Children {
-    const t = getTokens();
-    const s = getStyles(t);
-    const template = this.templates.find((tmpl) => tmpl.type === this.form.type);
-    // requiredFields from API are "connection.apiKey" format — strip prefix
-    const requiredFields = (template?.requiredFields || ['connection.apiKey'])
-      .map((f) => f.replace(/^connection\./, ''));
-    const isEdit = this.view_mode === 'edit';
-
-    return m('div', {style: s.container}, [
-      this.error ? m('div', {style: s.errorBanner}, [
-        m('span', '⚠️'),
-        m('span', this.error),
-      ]) : null,
-
-      m('div', {style: s.header}, [
-        m('div', [
-          m('h3', {style: s.title}, isEdit ? 'Edit Provider' : 'Add Provider'),
-          m('p', {style: s.subtitle}, isEdit ? 'Modify provider configuration' : 'Configure a new AI provider'),
-        ]),
-      ]),
-
-      m('div', {style: s.form}, [
-        // Type selector
-        m('div', {style: s.formSection}, [
-          m('h4', {style: s.formSectionTitle}, 'Provider Type'),
-          m('div', {style: s.formField}, [
-            m('select', {
-              style: s.formSelect,
-              value: this.form.type,
-              onchange: (e: Event) => this.onTypeChange((e.target as HTMLSelectElement).value as ProviderType),
-              disabled: isEdit,
-            },
-              this.templates.map((tmpl) =>
-                m('option', {value: tmpl.type}, `${TYPE_ICONS[tmpl.type]} ${tmpl.displayName}`),
-              ),
-            ),
-          ]),
-        ]),
-
-        // Name
-        m('div', {style: s.formSection}, [
-          m('h4', {style: s.formSectionTitle}, 'Name'),
-          m('div', {style: s.formField}, [
-            m('input[type=text]', {
-              style: s.formInput,
-              value: this.form.name,
-              oninput: (e: Event) => {
-                this.form.name = (e.target as HTMLInputElement).value;
-              },
-              placeholder: `My ${template?.displayName || 'Provider'}`,
-            }),
-          ]),
-        ]),
-
-        // Connection
-        m('div', {style: s.formSection}, [
-          m('h4', {style: s.formSectionTitle}, 'Connection'),
-          ...requiredFields.map((field) => {
-            const meta = CONNECTION_FIELD_LABELS[field] || {
-              label: field,
-              type: 'text',
-              placeholder: '',
-            };
-            return m('div', {style: s.formField}, [
-              m('label', {style: s.formLabel}, meta.label),
-              m(`input[type=${meta.type}]`, {
-                style: s.formInput,
-                value: (this.form.connection as Record<string, string>)[field] || '',
-                oninput: (e: Event) => {
-                  (this.form.connection as Record<string, string>)[field] =
-                    (e.target as HTMLInputElement).value;
-                },
-                placeholder: meta.placeholder,
-              }),
-            ]);
-          }),
-        ]),
-
-        // Models
-        m('div', {style: s.formSection}, [
-          m('h4', {style: s.formSectionTitle}, 'Models'),
-          m('div', {style: s.formField}, [
-            m('label', {style: s.formLabel}, 'Primary Model'),
-            template?.availableModels && template.availableModels.length > 0
-              ? m('select', {
-                  style: s.formSelect,
-                  value: this.form.models.primary,
-                  onchange: (e: Event) => {
-                    this.form.models.primary = (e.target as HTMLSelectElement).value;
-                  },
-                }, [
-                  m('option', {value: ''}, '-- Select --'),
-                  ...template.availableModels.map((mdl) =>
-                    m('option', {value: mdl.id}, `${mdl.name} (${mdl.tier})`),
-                  ),
-                ])
-              : m('input[type=text]', {
-                  style: s.formInput,
-                  value: this.form.models.primary,
-                  oninput: (e: Event) => {
-                    this.form.models.primary = (e.target as HTMLInputElement).value;
-                  },
-                  placeholder: template?.defaultModels.primary || 'Model ID',
-                }),
-            template?.defaultModels.primary
-              ? m('div', {style: s.formHint}, `Default: ${template.defaultModels.primary}`)
-              : null,
-          ]),
-          m('div', {style: s.formField}, [
-            m('label', {style: s.formLabel}, 'Light Model'),
-            template?.availableModels && template.availableModels.length > 0
-              ? m('select', {
-                  style: s.formSelect,
-                  value: this.form.models.light,
-                  onchange: (e: Event) => {
-                    this.form.models.light = (e.target as HTMLSelectElement).value;
-                  },
-                }, [
-                  m('option', {value: ''}, '-- Select --'),
-                  ...template.availableModels.map((mdl) =>
-                    m('option', {value: mdl.id}, `${mdl.name} (${mdl.tier})`),
-                  ),
-                ])
-              : m('input[type=text]', {
-                  style: s.formInput,
-                  value: this.form.models.light,
-                  oninput: (e: Event) => {
-                    this.form.models.light = (e.target as HTMLInputElement).value;
-                  },
-                  placeholder: template?.defaultModels.light || 'Model ID',
-                }),
-            template?.defaultModels.light
-              ? m('div', {style: s.formHint}, `Default: ${template.defaultModels.light}`)
-              : null,
-          ]),
-          m('div', {style: s.formField}, [
-            m('label', {style: s.formLabel}, 'Sub-agent Model (optional)'),
-            m('input[type=text]', {
-              style: s.formInput,
-              value: this.form.models.subAgent || '',
-              oninput: (e: Event) => {
-                this.form.models.subAgent = (e.target as HTMLInputElement).value || undefined;
-              },
-              placeholder: 'Leave empty to inherit primary',
-            }),
-          ]),
-        ]),
-
-        // Tuning (collapsible)
-        m('div', {style: s.formSection}, [
-          m('div', {
-            style: s.tuningToggle,
-            onclick: () => {
-              this.form.showTuning = !this.form.showTuning;
-            },
-          }, [
-            m('span', this.form.showTuning ? '▼' : '▶'),
-            'Advanced Tuning',
-          ]),
-          this.form.showTuning ? this.renderTuningFields() : null,
-        ]),
-
-        // Actions
-        m('div', {style: s.formActions}, [
-          m('button', {
-            style: {...s.btn, ...s.btnSecondary},
-            onclick: () => this.cancelForm(),
-          }, 'Cancel'),
-          m('button', {
-            style: {
-              ...s.btn,
-              ...s.btnPrimary,
-              ...(!this.form.name ? s.btnDisabled : {}),
-            },
-            onclick: () => this.saveProvider(),
-            disabled: !this.form.name,
-          }, isEdit ? 'Save Changes' : 'Create Provider'),
-        ]),
-      ]),
-    ]);
-  }
-
-  private renderTuningFields(): m.Children {
-    const t = getTokens();
-    const s = getStyles(t);
-    const tuning = this.form.tuning;
-
-    const numField = (label: string, key: keyof ProviderTuning, placeholder: string) =>
-      m('div', {style: s.formField}, [
-        m('label', {style: s.formLabel}, label),
-        m('input[type=number]', {
-          style: s.formInput,
-          value: tuning[key] ?? '',
-          oninput: (e: Event) => {
-            const val = (e.target as HTMLInputElement).value;
-            if (val === '') {
-              delete tuning[key];
-            } else {
-              (tuning as Record<string, unknown>)[key] = Number(val);
-            }
-          },
-          placeholder,
-        }),
-      ]);
-
-    const boolField = (label: string, key: 'enableSubAgents' | 'enableVerification') =>
-      m('div', {style: {...s.formField, display: 'flex', alignItems: 'center', gap: '8px'}}, [
-        m('input[type=checkbox]', {
-          checked: tuning[key] ?? true,
-          onchange: (e: Event) => {
-            tuning[key] = (e.target as HTMLInputElement).checked;
-          },
-        }),
-        m('label', {style: {...s.formLabel, margin: 0}}, label),
-      ]);
-
-    return m('div', {style: {paddingLeft: '12px', borderLeft: `2px solid ${t.border}`}}, [
-      numField('Max Turns', 'maxTurns', '30'),
-      m('div', {style: s.formField}, [
-        m('label', {style: s.formLabel}, 'Effort Level'),
-        m('select', {
-          style: s.formSelect,
-          value: tuning.effort || '',
-          onchange: (e: Event) => {
-            const val = (e.target as HTMLSelectElement).value;
-            if (val) {
-              tuning.effort = val;
-            } else {
-              delete tuning.effort;
-            }
-          },
-        }, [
-          m('option', {value: ''}, '-- Default --'),
-          m('option', {value: 'low'}, 'Low'),
-          m('option', {value: 'medium'}, 'Medium'),
-          m('option', {value: 'high'}, 'High'),
-        ]),
-      ]),
-      numField('Max Budget (USD)', 'maxBudgetUsd', '5'),
-      numField('Full Per-turn Timeout (ms)', 'fullPerTurnMs', '60000'),
-      numField('Quick Per-turn Timeout (ms)', 'quickPerTurnMs', '40000'),
-      numField('Verifier Timeout (ms)', 'verifierTimeoutMs', '60000'),
-      numField('Classifier Timeout (ms)', 'classifierTimeoutMs', '30000'),
-      boolField('Enable Sub-agents', 'enableSubAgents'),
-      boolField('Enable Verification', 'enableVerification'),
     ]);
   }
 }
