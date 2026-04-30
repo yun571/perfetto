@@ -20,7 +20,7 @@
  * Session management for the AI Assistant plugin.
  *
  * This module handles:
- * - Settings persistence (AI provider configuration)
+ * - Settings persistence (backend connection/auth configuration)
  * - Session storage (conversation history per trace)
  * - Migration from legacy storage formats
  * - Pinned results management

@@ -331,9 +331,9 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
           ])
         : null,
       m('div', {style: MODAL_STYLES.statusRow}, [
-        m('span', {style: MODAL_STYLES.statusLabel}, 'AI Ready'),
-        m('span', {style: {...MODAL_STYLES.statusValue, color: status.configured ? COLORS.success : COLORS.error}},
-          status.configured ? 'Yes' : 'No (API key missing)'),
+        m('span', {style: MODAL_STYLES.statusLabel}, 'Provider Env'),
+        m('span', {style: {...MODAL_STYLES.statusValue, color: status.configured ? COLORS.success : COLORS.warning}},
+          status.configured ? 'Configured' : 'No explicit env credential'),
       ]),
       status.environment
         ? m('div', {style: MODAL_STYLES.statusRow}, [
@@ -345,7 +345,7 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
       status.authRequired
         ? m('div', {style: {...MODAL_STYLES.alertBox, ...MODAL_STYLES.alertWarning, marginTop: '12px'}}, [
             m('span', {style: MODAL_STYLES.alertIcon}, '!'),
-            m('div', 'Backend requires API key authentication (SMARTPERFETTO_API_KEY). Make sure the API Key field above is correctly configured.'),
+            m('div', 'Backend requires API key authentication (SMARTPERFETTO_API_KEY). Make sure the Backend API Key field above is correctly configured.'),
           ])
         : null,
     ]);
@@ -394,7 +394,7 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
               m('div', {style: MODAL_STYLES.field}, [
                 m('label', {style: MODAL_STYLES.fieldLabel}, [
                   m('span', {style: MODAL_STYLES.fieldIcon}, '🔐'),
-                  'API Key',
+                  'Backend API Key',
                 ]),
                 m('input[type=password]', {
                   style: MODAL_STYLES.input,
@@ -402,9 +402,9 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
                   onchange: (e: Event) => {
                     this.settings.backendApiKey = (e.target as HTMLInputElement).value;
                   },
-                  placeholder: 'Optional: SMARTPERFETTO_API_KEY',
+                  placeholder: 'Optional backend auth token',
                 }),
-                m('div', {style: MODAL_STYLES.hint}, 'Required only if backend has SMARTPERFETTO_API_KEY configured.'),
+                m('div', {style: MODAL_STYLES.hint}, 'Only used for SMARTPERFETTO_API_KEY backend auth. Do not put LLM provider keys here.'),
               ]),
             ]),
 
@@ -432,9 +432,9 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
               m('div', [
                 m('span', 'AI model and provider are configured server-side via '),
                 m('code', {style: {background: 'var(--chat-bg-tertiary, rgba(0,0,0,0.15))', padding: '2px 6px', borderRadius: '4px', fontSize: '12px'}}, 'backend/.env'),
-                m('span', '. See '),
+                m('span', ', or through local Claude Code auth/config when running from source. See '),
                 m('code', {style: {background: 'var(--chat-bg-tertiary, rgba(0,0,0,0.15))', padding: '2px 6px', borderRadius: '4px', fontSize: '12px'}}, '.env.example'),
-                m('span', ' for all available options.'),
+                m('span', ' for explicit env options.'),
               ]),
             ]),
           ]),
