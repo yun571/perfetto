@@ -1192,6 +1192,16 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                 };
                 return order(a) - order(b);
               });
+            // Build a map of msg.id → previous user message's model for change-badge
+            const prevUserModelMap = new Map<string, string | undefined>();
+            let lastUserModel: string | undefined;
+            for (const msg of sortedMessages) {
+              if (msg.role === 'user') {
+                prevUserModelMap.set(msg.id, lastUserModel);
+                lastUserModel = msg.model;
+              }
+            }
+
             return sortedMessages.map((msg) => {
               // Round separator — visual divider between conversation rounds
               if (msg.flowTag === 'round_separator') {
@@ -1228,7 +1238,8 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                 ? 'U'  // User initial
                 : m('i.pf-icon', 'auto_awesome')),
 
-              // Message Content
+              // Message Content (wrapper so badge sits below bubble)
+              m('div.ai-bubble-wrapper', {}, [
               m('div.ai-bubble', {
                 class: bubbleClass,
               }, [
@@ -1525,6 +1536,17 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                 })()) : null,
               ]),
 
+              // Model-change badge — below bubble, inside wrapper so it stacks vertically
+              (msg.role === 'user' && msg.model && msg.model !== prevUserModelMap.get(msg.id))
+                ? m('div.ai-model-badge', {
+                    title: `Switched to: ${msg.model}`,
+                  }, [
+                    m('i.pf-icon', {style: {fontSize: '11px', verticalAlign: 'middle'}}, 'swap_horiz'),
+                    m('span', ` ${msg.model}`),
+                  ])
+                : null,
+              ]), // end ai-bubble-wrapper
+
               // Feedback buttons — show on non-progress assistant messages
               (msg.role === 'assistant' && !isProgressMessage && msg.content.length > 50)
                 ? m('div.ai-feedback-bar', [
@@ -1621,14 +1643,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                 : null,
               this.renderSliceCard(),
               this.renderAreaCard(),
-              m('div', {style: {display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between'}}, [
-                this.renderAnalysisModeChips(),
-                m(ProviderQuickSwitcher, {
-                  backendUrl: this.state.settings.backendUrl,
-                  apiKey: this.state.settings.backendApiKey || undefined,
-                  compact: true,
-                }),
-              ]),
+              this.renderAnalysisModeChips(),
               m('div.ai-input-wrapper', [
                 m('textarea#ai-input.ai-input', {
                   class: this.state.isLoading || !this.state.aiService || !isInRpcMode ? 'disabled' : '',
@@ -1642,6 +1657,13 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                   onkeydown: (e: KeyboardEvent) => this.handleKeyDown(e),
                   disabled: this.state.isLoading || !this.state.aiService || !isInRpcMode,
                 }),
+                m(ProviderQuickSwitcher, {
+                  backendUrl: this.state.settings.backendUrl,
+                  apiKey: this.state.settings.backendApiKey || undefined,
+                  compact: true,
+                  onActivate: () => this.refreshServerStatus(),
+                }),
+                m('div.ai-input-divider'),
                 this.state.isLoading
                   ? m('button.ai-send-btn.ai-stop-btn', {
                       onclick: () => this.cancelAnalysis(),
@@ -2290,12 +2312,13 @@ Click ⚙️ to configure backend connection.`;
       });
     }
 
-    // Add user message
+    // Add user message — stamp current model for change-detection badge
     this.addMessage({
       id: this.generateId(),
       role: 'user',
       content: input,
       timestamp: Date.now(),
+      model: this.serverStatus.model,
     });
 
     this.state.input = '';

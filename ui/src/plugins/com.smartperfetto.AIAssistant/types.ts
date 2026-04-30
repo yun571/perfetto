@@ -35,6 +35,8 @@ export interface Message {
   content: string;
   timestamp: number;
   flowTag?: 'streaming_flow' | 'answer_stream' | 'progress_note' | 'round_separator';
+  /** Model active when this user message was sent — used to show model-change badge */
+  model?: string;
   sqlResult?: SqlQueryResult;
   query?: string;
   reportUrl?: string;  // HTML report link

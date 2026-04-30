@@ -25,6 +25,7 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
   private healthMap = new Map<string, HealthStatus>();
   private outsideClickHandler: ((e: Event) => void) | null = null;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  private lastLoadedAt = 0;
 
   oninit(vnode: m.Vnode<ProviderQuickSwitcherAttrs>) {
     this.backendUrl = vnode.attrs.backendUrl;
@@ -57,10 +58,14 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
         m.redraw();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        this.focusIndex = Math.max(this.focusIndex - 1, 0);
+        this.focusIndex = Math.max(this.focusIndex - 1, -2);
         m.redraw();
       } else if (e.key === 'Enter') {
-        if (this.focusIndex >= 0 && this.focusIndex < this.providers.length) {
+        if (this.focusIndex === -2) {
+          const noActive = !this.providers.some((p) => p.isActive);
+          if (!noActive) void this.deactivateAll();
+          else { this.open = false; this.focusIndex = -1; m.redraw(); }
+        } else if (this.focusIndex >= 0 && this.focusIndex < this.providers.length) {
           const p = this.providers[this.focusIndex];
           if (p && !p.isActive) {
             void this.activate(p.id);
@@ -113,11 +118,12 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
       // Silent fail for switcher
     } finally {
       this.loading = false;
+      this.lastLoadedAt = Date.now();
       m.redraw();
     }
   }
 
-  private async activate(id: string) {
+  private async activate(id: string, vnode?: m.Vnode<ProviderQuickSwitcherAttrs>) {
     this.activating = true;
     m.redraw();
     try {
@@ -130,7 +136,31 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
         const activated = this.providers.find((p) => p.id === id);
         if (activated) {
           this.showToast(`✶ Switched to ${activated.name}`);
+          vnode?.attrs.onActivate?.();
         }
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      this.activating = false;
+      this.open = false;
+      this.focusIndex = -1;
+      m.redraw();
+    }
+  }
+
+  private async deactivateAll(vnode?: m.Vnode<ProviderQuickSwitcherAttrs>) {
+    this.activating = true;
+    m.redraw();
+    try {
+      const res = await fetch(apiUrl(this.backendUrl, '/deactivate'), {
+        method: 'POST',
+        headers: buildHeaders(this.apiKey),
+      });
+      if (res.ok) {
+        await this.loadProviders();
+        this.showToast('✶ Switched to System Default');
+        vnode?.attrs.onActivate?.();
       }
     } catch {
       // Silent fail
@@ -159,7 +189,11 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
     m.redraw();
   }
 
-  view(_vnode: m.Vnode<ProviderQuickSwitcherAttrs>): m.Children {
+  view(vnode: m.Vnode<ProviderQuickSwitcherAttrs>): m.Children {
+    if (!this.loading && this.lastLoadedAt > 0 && Date.now() - this.lastLoadedAt > 3000) {
+      void this.loadProviders();
+    }
+
     const t = getTokens();
     const s = getStyles(t);
     const active = this.providers.find((p) => p.isActive);
@@ -170,9 +204,7 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
       ]);
     }
 
-    if (this.providers.length === 0) {
-      return null;
-    }
+    // Even with no providers, show System Default option
 
     return m('div', {'data-switcher': true, style: s.switcherContainer}, [
       m('button', {
@@ -188,13 +220,13 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
       }, [
         this.activating
           ? m('span', {style: {fontSize: '12px'}}, '⏳')
-          : m('span', TYPE_ICONS[active?.type || 'custom']),
+          : m('span', active ? TYPE_ICONS[active.type] : '\u{1F4BB}'),
         m('span', {style: {maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis'}},
-          active?.name || 'No provider'),
+          active?.name || 'System Default'),
         m('span', {style: {fontSize: '10px', opacity: 0.6}}, this.open ? '▲' : '▼'),
       ]),
 
-      this.open ? this.renderDropdown() : null,
+      this.open ? this.renderDropdown(vnode) : null,
 
       this.toastMessage ? this.renderToast() : null,
     ]);
@@ -222,13 +254,37 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
     });
   }
 
-  private renderDropdown(): m.Children {
+  private renderDropdown(vnode: m.Vnode<ProviderQuickSwitcherAttrs>): m.Children {
     const t = getTokens();
     const s = getStyles(t);
+    const noActiveProvider = !this.providers.some((p) => p.isActive);
+    // All items need keys since we mix env item with provider items
+    const envItem = m('div', {
+      key: '__env__',
+      style: {
+        ...s.switcherItem,
+        ...(noActiveProvider ? s.switcherItemActive : {}),
+        ...(this.focusIndex === -2 ? {backgroundColor: t.surfaceHover, outline: `1px solid ${t.accent}`} : {}),
+      },
+      onclick: () => {
+        if (!noActiveProvider) void this.deactivateAll(vnode);
+        else { this.open = false; this.focusIndex = -1; }
+      },
+      onmouseenter: () => { this.focusIndex = -2; },
+    }, [
+      m('span', {style: {fontSize: '16px'}}, '\u{1F4BB}'),
+      m('div', {style: {flex: 1, minWidth: 0}}, [
+        m('div', {style: {fontSize: '13px', fontWeight: 500}}, 'System Default'),
+        m('div', {style: {fontSize: '11px', color: t.textSecondary}}, '.env config'),
+      ]),
+      noActiveProvider ? m('div', {style: s.activeDot}) : null,
+    ]);
+
     return m('div', {
       style: s.switcherDropdown,
       onclick: (e: Event) => e.stopPropagation(),
     }, [
+      envItem,
       ...this.providers.map((p, i) =>
         m('div', {
           style: {
@@ -241,15 +297,13 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
           },
           key: p.id,
           onclick: () => {
-            if (!p.isActive) void this.activate(p.id);
+            if (!p.isActive) void this.activate(p.id, vnode);
             else {
               this.open = false;
               this.focusIndex = -1;
             }
           },
-          onmouseenter: () => {
-            this.focusIndex = i;
-          },
+          onmouseenter: () => { this.focusIndex = i; },
         }, [
           m('span', {style: {fontSize: '16px'}}, TYPE_ICONS[p.type]),
           m('div', {style: {flex: 1, minWidth: 0}}, [

@@ -8,6 +8,7 @@ import {
   ProviderConfig,
   ProviderTemplate,
   FormState,
+  BedrockAuthMethod,
   TYPE_ICONS,
   CONNECTION_FIELD_LABELS,
   buildHeaders,
@@ -48,6 +49,8 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         connection: {...editingProvider.connection},
         tuning: editingProvider.tuning ? {...editingProvider.tuning} : {},
         showTuning: !!editingProvider.tuning && Object.keys(editingProvider.tuning).length > 0,
+        useBedrock: editingProvider.connection.useBedrock !== false,
+        bedrockAuthMethod: this.inferAuthMethod(editingProvider.connection),
       };
     } else if (cloneSource) {
       const src = cloneSource;
@@ -60,6 +63,8 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         connection: {...src.connection},
         tuning: src.tuning ? {...src.tuning} : {},
         showTuning: !!src.tuning && Object.keys(src.tuning).length > 0,
+        useBedrock: src.connection.useBedrock !== false,
+        bedrockAuthMethod: this.inferAuthMethod(src.connection),
       };
     } else {
       this.isEdit = false;
@@ -81,7 +86,17 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
       this.form.models = {...template.defaultModels};
       this.form.connection = {};
     }
+    if (type === 'bedrock') {
+      this.form.useBedrock = true;
+      this.form.bedrockAuthMethod = 'accessKey';
+    }
     this.expandedSection = 'name';
+  }
+
+  private inferAuthMethod(conn: {awsBearerToken?: string; awsProfile?: string}): BedrockAuthMethod {
+    if (conn.awsBearerToken) return 'bearer';
+    if (conn.awsProfile) return 'profile';
+    return 'accessKey';
   }
 
   private toggleSection(section: AccordionSection) {
@@ -115,6 +130,10 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
   private async saveProvider(attrs: ProviderFormAttrs) {
     const {templates, backendUrl, apiKey, onSaved} = attrs;
     const template = templates.find((tmpl) => tmpl.type === this.form.type);
+    const connection = {...this.form.connection};
+    if (this.form.type === 'bedrock') {
+      connection.useBedrock = this.form.useBedrock;
+    }
     const body: Record<string, unknown> = {
       name: this.form.name,
       type: this.form.type,
@@ -123,7 +142,7 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         light: this.form.models.light || template?.defaultModels.light || '',
         ...(this.form.models.subAgent ? {subAgent: this.form.models.subAgent} : {}),
       },
-      connection: this.form.connection,
+      connection,
     };
 
     if (this.form.showTuning && Object.keys(this.form.tuning).length > 0) {
@@ -171,7 +190,12 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     const {templates, onCancel} = vnode.attrs;
     const template = templates.find((tmpl) => tmpl.type === this.form.type);
 
-    return m('div', {style: s.container}, [
+    return m('div', {style: {
+      ...s.container,
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column' as const,
+    }}, [
       this.error
         ? m('div', {style: s.errorBanner}, [
             m('span', '⚠️'),
@@ -190,11 +214,36 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         }, '← Back'),
       ]),
 
-      this.renderTypeGrid(t, s, templates),
+      m('div', {style: {flex: 1, overflowY: 'auto' as const, paddingBottom: '8px'}}, [
+        this.renderTypeGrid(t, s, templates),
+        m('div', {style: {marginTop: '16px'}},
+          this.renderAccordion(t, s, template, vnode.attrs),
+        ),
+      ]),
 
-      m('div', {style: {marginTop: '16px'}},
-        this.renderAccordion(t, s, template, vnode.attrs),
-      ),
+      m('div', {style: {
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '10px',
+        padding: '12px 20px',
+        borderTop: `1px solid ${t.border}`,
+        backgroundColor: t.bg,
+        flexShrink: 0,
+      }}, [
+        m('button', {
+          style: {...s.btn, ...s.btnSecondary},
+          onclick: () => onCancel(),
+        }, 'Close'),
+        m('button', {
+          style: {
+            ...s.btn,
+            ...s.btnPrimary,
+            ...(!this.form.name || this.saving ? s.btnDisabled : {}),
+          },
+          disabled: !this.form.name || this.saving,
+          onclick: () => this.saveProvider(vnode.attrs),
+        }, this.saving ? 'Saving...' : (this.isEdit ? 'Save Changes' : 'Create Provider')),
+      ]),
     ]);
   }
 
@@ -277,18 +326,6 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
             : null,
         ]);
       }),
-
-      m('div', {key: 'actions', style: {...s.formActions, marginTop: '16px'}}, [
-        m('button', {
-          style: {
-            ...s.btn,
-            ...s.btnPrimary,
-            ...(!this.form.name || this.saving ? s.btnDisabled : {}),
-          },
-          disabled: !this.form.name || this.saving,
-          onclick: () => this.saveProvider(attrs),
-        }, this.saving ? 'Saving...' : (this.isEdit ? 'Save Changes' : 'Create Provider')),
-      ]),
     ]);
   }
 
@@ -336,6 +373,10 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
       return m('div', {style: s.formField}, m('span', {style: s.formHint}, 'Select a provider type first.'));
     }
 
+    if (this.form.type === 'bedrock') {
+      return this.renderBedrockConnection(s);
+    }
+
     const requiredFields = (template.requiredFields || [])
       .map((f) => f.replace(/^connection\./, ''));
 
@@ -364,6 +405,106 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         ]);
       }),
     );
+  }
+
+  private renderBedrockConnection(s: ReturnType<typeof getStyles>): m.Children {
+    const t = getTokens();
+    const conn = this.form.connection as Record<string, string>;
+
+    const authFields: Record<BedrockAuthMethod, Array<{key: string; label: string; type: string; placeholder: string}>> = {
+      bearer: [
+        {key: 'awsBearerToken', label: 'AWS Bearer Token', type: 'password', placeholder: 'Bearer token for Bedrock access'},
+      ],
+      accessKey: [
+        {key: 'awsAccessKeyId', label: 'AWS Access Key ID', type: 'text', placeholder: 'AKIA...'},
+        {key: 'awsSecretAccessKey', label: 'AWS Secret Access Key', type: 'password', placeholder: 'Secret key...'},
+        {key: 'awsSessionToken', label: 'Session Token (optional)', type: 'password', placeholder: 'Temporary session token...'},
+      ],
+      profile: [
+        {key: 'awsProfile', label: 'AWS Profile Name', type: 'text', placeholder: 'default'},
+      ],
+    };
+
+    return m('div', [
+      m('div', {style: s.formField}, [
+        m('label', {style: s.formLabel}, 'AWS Region'),
+        m('input[type=text]', {
+          style: s.formInput,
+          value: conn['awsRegion'] || '',
+          oninput: (e: Event) => { conn['awsRegion'] = (e.target as HTMLInputElement).value; },
+          placeholder: 'us-east-1 (leave empty to use AWS_REGION env)',
+        }),
+        m('div', {style: s.formHint}, 'Leave empty to inherit from AWS_REGION environment variable'),
+      ]),
+
+      m('div', {style: s.formField}, [
+        m('label', {style: s.formLabel}, 'API Key (optional)'),
+        m('input[type=password]', {
+          style: s.formInput,
+          value: conn['apiKey'] || '',
+          oninput: (e: Event) => { conn['apiKey'] = (e.target as HTMLInputElement).value; },
+          placeholder: 'sk-ant-... (for Anthropic proxy, if applicable)',
+        }),
+        m('div', {style: s.formHint}, 'Only needed if using an Anthropic API proxy in front of Bedrock'),
+      ]),
+
+      m('div', {style: {
+        marginTop: '16px',
+        paddingTop: '12px',
+        borderTop: `1px solid ${t.border}`,
+      }}, [
+        m('div', {key: 'adv-title', style: {...s.formLabel, fontSize: '12px', color: t.textSecondary, textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '12px'}}, 'Advanced Configuration'),
+
+        m('div', {key: 'adv-usebedrock', style: {...s.formField, display: 'flex', alignItems: 'center', gap: '8px'}}, [
+          m('input[type=checkbox]', {
+            checked: this.form.useBedrock,
+            onchange: (e: Event) => {
+              this.form.useBedrock = (e.target as HTMLInputElement).checked;
+            },
+          }),
+          m('label', {style: {...s.formLabel, margin: 0}}, 'Use Bedrock'),
+          m('span', {style: {fontSize: '11px', color: t.textMuted}}, '(CLAUDE_CODE_USE_BEDROCK=1)'),
+        ]),
+
+        m('div', {key: 'adv-authmethod', style: s.formField}, [
+          m('label', {style: s.formLabel}, 'Authentication Method'),
+          m('select', {
+            style: s.formSelect,
+            value: this.form.bedrockAuthMethod,
+            onchange: (e: Event) => {
+              this.form.bedrockAuthMethod = (e.target as HTMLSelectElement).value as BedrockAuthMethod;
+            },
+          }, [
+            m('option', {value: 'accessKey'}, 'Access Key (AWS_ACCESS_KEY_ID + Secret)'),
+            m('option', {value: 'bearer'}, 'Bearer Token (AWS_BEARER_TOKEN_BEDROCK)'),
+            m('option', {value: 'profile'}, 'AWS Profile (AWS_PROFILE)'),
+          ]),
+        ]),
+
+        ...authFields[this.form.bedrockAuthMethod].map((field) =>
+          m('div', {key: field.key, style: s.formField}, [
+            m('label', {style: s.formLabel}, field.label),
+            m(`input[type=${field.type}]`, {
+              style: s.formInput,
+              value: conn[field.key] || '',
+              oninput: (e: Event) => { conn[field.key] = (e.target as HTMLInputElement).value; },
+              placeholder: field.placeholder,
+            }),
+          ]),
+        ),
+
+        m('div', {key: 'adv-baseurl', style: s.formField}, [
+          m('label', {style: s.formLabel}, 'Bedrock Base URL (optional)'),
+          m('input[type=text]', {
+            style: s.formInput,
+            value: conn['baseUrl'] || '',
+            oninput: (e: Event) => { conn['baseUrl'] = (e.target as HTMLInputElement).value; },
+            placeholder: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+          }),
+          m('div', {style: s.formHint}, 'Maps to ANTHROPIC_BEDROCK_BASE_URL. Leave empty for default.'),
+        ]),
+      ]),
+    ]);
   }
 
   private renderModelsSection(

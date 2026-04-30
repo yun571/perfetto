@@ -29,6 +29,7 @@ export interface ProviderConnection {
   awsProfile?: string;
   gcpProjectId?: string;
   gcpRegion?: string;
+  useBedrock?: boolean;
 }
 
 export interface ProviderTuning {
@@ -68,12 +69,14 @@ export interface ProviderTemplate {
 export interface ProviderPanelAttrs {
   backendUrl: string;
   apiKey?: string;
+  onClose?: () => void;
 }
 
 export interface ProviderQuickSwitcherAttrs {
   backendUrl: string;
   apiKey?: string;
   compact?: boolean;
+  onActivate?: () => void;
 }
 
 export const TYPE_ICONS: Record<ProviderType, string> = {
@@ -117,6 +120,8 @@ export function apiUrl(backendUrl: string, path: string): string {
   return `${base}/api/v1/providers${path}`;
 }
 
+export type BedrockAuthMethod = 'bearer' | 'accessKey' | 'profile';
+
 export interface FormState {
   name: string;
   type: ProviderType;
@@ -124,6 +129,8 @@ export interface FormState {
   connection: ProviderConnection;
   tuning: ProviderTuning;
   showTuning: boolean;
+  useBedrock: boolean;
+  bedrockAuthMethod: BedrockAuthMethod;
 }
 
 export function createEmptyForm(): FormState {
@@ -134,5 +141,7 @@ export function createEmptyForm(): FormState {
     connection: {},
     tuning: {},
     showTuning: false,
+    useBedrock: true,
+    bedrockAuthMethod: 'accessKey',
   };
 }

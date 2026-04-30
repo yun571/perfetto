@@ -8,7 +8,6 @@ import {
   ProviderPanelAttrs,
   HealthStatus,
   TYPE_ICONS,
-  CATEGORY_LABELS,
   buildHeaders,
   apiUrl,
 } from './provider_types';
@@ -26,7 +25,7 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
   private view_mode: 'list' | 'add' | 'edit' = 'list';
   private editingId: string | null = null;
   private testingId: string | null = null;
-  private testResult: {success: boolean; latencyMs?: number; error?: string} | null = null;
+  private testResult: {success: boolean; latencyMs?: number; error?: string; modelVerified?: boolean} | null = null;
   private deleting: string | null = null;
   private backendUrl = '';
   private apiKey?: string;
@@ -36,6 +35,8 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
   private effectiveRevealedKeys = new Set<string>();
   private loadingEffective = false;
   private cloneSource: ProviderConfig | null = null;
+  private expandedId: string | null = null;
+  private hoveredId: string | null = null;
 
   oninit(vnode: m.Vnode<ProviderPanelAttrs>) {
     this.backendUrl = vnode.attrs.backendUrl;
@@ -117,6 +118,22 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
     }
   }
 
+  private async deactivateAll() {
+    try {
+      const res = await fetch(apiUrl(this.backendUrl, '/deactivate'), {
+        method: 'POST',
+        headers: buildHeaders(this.apiKey),
+      });
+      if (!res.ok) throw new Error(`Deactivation failed: ${res.status}`);
+      this.success = 'Switched to system default (.env)';
+      await this.loadData();
+      this.clearSuccessAfterDelay();
+    } catch (e: unknown) {
+      this.error = e instanceof Error ? e.message : 'Deactivation failed';
+      m.redraw();
+    }
+  }
+
   private async deleteProvider(id: string) {
     this.deleting = id;
     m.redraw();
@@ -154,6 +171,7 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
         success: result.success,
         latencyMs: result.latencyMs,
         error: result.error,
+        modelVerified: result.modelVerified,
       };
       this.healthMap.set(id, this.testResult.success ? 'passed' : 'failed');
     } catch (e: unknown) {
@@ -239,7 +257,14 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
   private renderList(): m.Children {
     const t = getTokens();
     const s = getStyles(t);
-    return m('div', {style: s.container}, [
+    const hasActive = this.providers.some((p) => p.isActive);
+
+    return m('div', {style: {
+      ...s.container,
+      display: 'flex',
+      flexDirection: 'column' as const,
+      position: 'relative' as const,
+    }}, [
       this.error ? m('div', {style: s.errorBanner}, [
         m('span', '⚠️'),
         m('span', this.error),
@@ -260,16 +285,22 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
         }, '+ Add Provider'),
       ]),
 
-      this.loading
-        ? m('div', {style: s.loadingState}, [
-            m('span', '⏳'),
-            'Loading providers...',
-          ])
-        : this.providers.length === 0
-          ? this.renderEmpty()
-          : this.renderGrid(),
+      m('div', {style: {
+        flex: 1,
+        overflowY: 'auto' as const,
+        paddingBottom: hasActive ? '56px' : '0',
+      }}, [
+        this.loading
+          ? m('div', {style: s.loadingState}, [
+              m('span', '⏳'),
+              'Loading providers...',
+            ])
+          : this.providers.length === 0
+            ? this.renderEmpty()
+            : this.renderGrid(),
+        this.renderTestResult(),
+      ]),
 
-      this.renderTestResult(),
       this.renderEffectiveConfig(),
     ]);
   }
@@ -290,87 +321,252 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
 
   private renderGrid(): m.Children {
     const t = getTokens();
-    const s = getStyles(t);
-    return m('div', {style: s.grid},
-      this.providers.map((p) => this.renderCard(p)),
-    );
+    const noActiveProvider = !this.providers.some((p) => p.isActive);
+    return m('div', {style: {display: 'flex', flexDirection: 'column' as const, gap: '6px'}}, [
+      this.renderEnvFallbackItem(t, noActiveProvider),
+      ...this.providers.map((p) => this.renderListItem(p, t)),
+    ]);
   }
 
-  private renderCard(provider: ProviderConfig): m.Children {
-    const t = getTokens();
-    const s = getStyles(t);
-    const isActive = provider.isActive;
-    const cardStyle = {
-      ...s.card,
-      ...(isActive ? s.cardActive : {}),
-    };
-    const health = this.healthMap.get(provider.id) || 'untested';
-
-    return m('div', {style: cardStyle, key: provider.id}, [
-      m('div', {style: s.cardHeader}, [
-        m('div', {style: s.cardIcon}, TYPE_ICONS[provider.type] || '\u{1F527}'),
-        m('div', {style: {flex: 1, minWidth: 0}}, [
-          m('div', {style: s.cardName}, provider.name),
-          m('div', {style: {display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' as const}}, [
-            isActive
-              ? m('span', {style: {...s.cardBadge, ...s.activeBadge}}, [
-                  m('span', {style: {width: '6px', height: '6px', borderRadius: '50%', backgroundColor: t.accent, display: 'inline-block'}}),
-                  'Active',
-                ])
-              : null,
-            m('span', {style: {...s.cardBadge, ...s.categoryBadge}},
-              CATEGORY_LABELS[provider.category] || provider.category),
+  private renderEnvFallbackItem(t: ReturnType<typeof getTokens>, isActive: boolean): m.Children {
+    const isHovered = this.hoveredId === '__env__';
+    return m('div', {
+      key: '__env__',
+      style: {
+        padding: '12px 14px',
+        borderRadius: '8px',
+        cursor: isActive ? 'default' : 'pointer',
+        backgroundColor: isActive ? `${t.accent}15` : isHovered ? t.surfaceHover : t.surface,
+        border: isActive ? `1px solid ${t.accent}44` : `1px solid ${isHovered ? t.border : 'transparent'}`,
+        borderLeft: isActive ? `3px solid ${t.accent}` : `3px solid ${isHovered ? t.textMuted : 'transparent'}`,
+        transition: 'all 0.15s ease',
+        boxShadow: isHovered ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
+      },
+      onclick: () => {
+        if (!isActive) this.deactivateAll();
+      },
+      onmouseenter: () => { this.hoveredId = '__env__'; },
+      onmouseleave: () => { this.hoveredId = null; },
+    }, [
+      m('div', {style: {display: 'flex', alignItems: 'center', gap: '10px'}}, [
+        m('div', {style: {
+          fontSize: '20px',
+          width: '32px',
+          height: '32px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: '6px',
+          backgroundColor: t.surface,
+          flexShrink: 0,
+        }}, '\u{1F4BB}'),
+        m('div', {style: {flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' as const, justifyContent: 'center'}}, [
+          m('div', {style: {display: 'flex', alignItems: 'center', gap: '6px'}}, [
+            m('span', {style: {
+              fontSize: '14px',
+              fontWeight: 500,
+              color: t.text,
+            }}, 'System Default'),
+            isActive ? m('span', {style: {
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: t.accentGradient,
+              display: 'inline-block',
+              flexShrink: 0,
+              boxShadow: `0 0 4px ${t.accent}`,
+            }}) : null,
           ]),
+          m('div', {style: {fontSize: '12px', color: t.textMuted, marginTop: '2px'}},
+            'Use .env configuration (ANTHROPIC_API_KEY, CLAUDE_MODEL, etc.)'),
         ]),
-        m('div', {
-          style: {
-            ...s.healthDot,
-            ...(health === 'passed' ? s.healthPassed : health === 'failed' ? s.healthFailed : s.healthUntested),
-          },
-          title: health === 'passed' ? 'Test passed' : health === 'failed' ? 'Test failed' : 'Not tested',
-        }),
-      ]),
-
-      m('div', {style: s.cardModels}, [
-        m('div', `Model: ${provider.models.primary}`),
-        m('div', `Light: ${provider.models.light}`),
-        provider.models.subAgent
-          ? m('div', `Sub-agent: ${provider.models.subAgent}`)
-          : null,
-      ]),
-
-      m('div', {style: s.cardActions}, [
-        !isActive
-          ? m('button', {
-              style: s.actionBtn,
-              onclick: () => this.activateProvider(provider.id),
-              title: 'Activate',
-            }, '⭐ Activate')
-          : null,
-        m('button', {
-          style: s.actionBtn,
-          onclick: () => this.testConnection(provider.id),
-          disabled: this.testingId === provider.id,
-          title: 'Test Connection',
-        }, this.testingId === provider.id ? '⏳' : '\u{1F50C} Test'),
-        m('button', {
-          style: s.actionBtn,
-          onclick: () => this.startEdit(provider),
-          title: 'Edit',
-        }, '✏️ Edit'),
-        m('button', {
-          style: s.actionBtn,
-          onclick: () => this.cloneProvider(provider),
-          title: 'Clone',
-        }, '📋 Clone'),
-        m('button', {
-          style: {...s.actionBtn, ...s.actionBtnDanger},
-          onclick: () => this.deleteProvider(provider.id),
-          disabled: this.deleting === provider.id || isActive,
-          title: isActive ? 'Cannot delete active provider' : 'Delete',
-        }, this.deleting === provider.id ? '⏳' : '\u{1F5D1}️'),
       ]),
     ]);
+  }
+
+  private renderListItem(provider: ProviderConfig, t: ReturnType<typeof getTokens>): m.Children {
+    const isActive = provider.isActive;
+    const isHovered = this.hoveredId === provider.id;
+    const isExpanded = this.expandedId === provider.id;
+    const health = this.healthMap.get(provider.id) || 'untested';
+    const hasSubtitle = isActive || provider.category === 'official';
+
+    return m('div', {
+      key: provider.id,
+      style: {
+        padding: '12px 14px',
+        borderRadius: '8px',
+        cursor: isActive ? 'default' : 'pointer',
+        backgroundColor: isActive ? `${t.accent}15` : isHovered ? t.surfaceHover : t.surface,
+        border: isActive ? `1px solid ${t.accent}44` : `1px solid ${isHovered ? t.border : 'transparent'}`,
+        borderLeft: isActive ? `3px solid ${t.accent}` : `3px solid ${isHovered ? t.textMuted : 'transparent'}`,
+        transition: 'all 0.15s ease',
+        boxShadow: isHovered ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
+      },
+      onclick: () => {
+        if (!isActive) this.activateProvider(provider.id);
+      },
+      onmouseenter: () => { this.hoveredId = provider.id; },
+      onmouseleave: () => { this.hoveredId = null; },
+    }, [
+      m('div', {style: {display: 'flex', alignItems: 'center', gap: '10px'}}, [
+        m('div', {style: {
+          fontSize: '20px',
+          width: '32px',
+          height: '32px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: '6px',
+          backgroundColor: t.surface,
+          flexShrink: 0,
+        }}, TYPE_ICONS[provider.type] || '\u{1F527}'),
+
+        m('div', {style: {flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' as const, justifyContent: 'center'}}, [
+          m('div', {style: {display: 'flex', alignItems: 'center', gap: '6px'}}, [
+            m('span', {style: {
+              fontSize: '14px',
+              fontWeight: 500,
+              color: t.text,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap' as const,
+            }}, provider.name),
+            isActive ? m('span', {style: {
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: t.accentGradient,
+              display: 'inline-block',
+              flexShrink: 0,
+              boxShadow: `0 0 4px ${t.accent}`,
+            }}) : null,
+            health !== 'untested' ? m('span', {style: {
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: health === 'passed' ? t.success : t.error,
+              display: 'inline-block',
+              flexShrink: 0,
+            }}) : null,
+          ]),
+          hasSubtitle ? m('div', {style: {display: 'flex', gap: '4px', marginTop: '2px'}}, [
+            provider.category === 'official'
+              ? m('span', {style: {
+                  fontSize: '10px',
+                  padding: '1px 5px',
+                  borderRadius: '3px',
+                  backgroundColor: `${t.accent}20`,
+                  color: t.accent,
+                  fontWeight: 500,
+                }}, 'Official')
+              : null,
+            isActive
+              ? m('span', {style: {
+                  fontSize: '10px',
+                  padding: '1px 5px',
+                  borderRadius: '3px',
+                  background: t.accentGradient,
+                  color: '#1a1a1a',
+                  fontWeight: 600,
+                }}, 'Active')
+              : null,
+          ]) : null,
+        ]),
+
+        isHovered ? m('div', {
+          style: {display: 'flex', gap: '4px', flexShrink: 0},
+          onclick: (e: Event) => e.stopPropagation(),
+        }, [
+          m('button', {
+            style: this.listActionBtnStyle(t),
+            onclick: () => this.testConnection(provider.id),
+            disabled: this.testingId === provider.id,
+            title: 'Test Connection',
+          }, this.testingId === provider.id ? '⏳' : '\u{1F50C}'),
+          m('button', {
+            style: this.listActionBtnStyle(t),
+            onclick: () => this.startEdit(provider),
+            title: 'Edit Provider',
+          }, '✏️'),
+          m('button', {
+            style: this.listActionBtnStyle(t),
+            onclick: () => this.cloneProvider(provider),
+            title: 'Clone Provider',
+          }, '📋'),
+          m('button', {
+            style: {...this.listActionBtnStyle(t), color: t.error},
+            onclick: () => this.deleteProvider(provider.id),
+            disabled: this.deleting === provider.id || isActive,
+            title: isActive ? 'Cannot delete active provider' : 'Delete Provider',
+          }, this.deleting === provider.id ? '⏳' : '\u{1F5D1}️'),
+        ]) : null,
+
+        m('button', {
+          style: {
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '4px',
+            fontSize: '11px',
+            color: t.textMuted,
+            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+            transition: 'transform 0.15s ease',
+            flexShrink: 0,
+          },
+          onclick: (e: Event) => {
+            e.stopPropagation();
+            this.expandedId = isExpanded ? null : provider.id;
+          },
+          title: 'Show model details',
+        }, '▶'),
+      ]),
+
+      isExpanded ? m('div', {
+        style: {
+          marginTop: '8px',
+          marginLeft: '42px',
+          padding: '8px 10px',
+          fontSize: '12px',
+          color: t.textSecondary,
+          fontFamily: 'monospace',
+          backgroundColor: t.surface,
+          borderRadius: '6px',
+          lineHeight: '1.6',
+          animation: 'fadeSlideIn 0.15s ease-out',
+        },
+        onclick: (e: Event) => e.stopPropagation(),
+      }, [
+        m('div', `Primary: ${provider.models.primary}`),
+        m('div', `Light: ${provider.models.light}`),
+        provider.models.subAgent ? m('div', `Sub-agent: ${provider.models.subAgent}`) : null,
+        provider.tuning && Object.keys(provider.tuning).length > 0
+          ? m('div', {style: {marginTop: '4px', borderTop: `1px solid ${t.border}`, paddingTop: '4px'}},
+              Object.entries(provider.tuning).map(([k, v]) =>
+                m('div', {key: k}, `${k}: ${v}`),
+              ),
+            )
+          : null,
+      ]) : null,
+    ]);
+  }
+
+  private listActionBtnStyle(t: ReturnType<typeof getTokens>) {
+    return {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '26px',
+      height: '26px',
+      border: `1px solid ${t.border}`,
+      borderRadius: '5px',
+      fontSize: '12px',
+      cursor: 'pointer',
+      backgroundColor: t.surface,
+      color: t.textSecondary,
+      transition: 'all 0.15s ease',
+      padding: 0,
+    };
   }
 
   private renderTestResult(): m.Children {
@@ -378,19 +574,27 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
 
     const t = getTokens();
     const s = getStyles(t);
+    const isWarning = this.testResult.success && this.testResult.error;
+    const colorKey = !this.testResult.success ? t.error : isWarning ? '#f59e0b' : t.success;
     const style = {
       ...s.testResult,
-      ...(this.testResult.success
-        ? {backgroundColor: `${t.success}15`, color: t.success, border: `1px solid ${t.success}`}
-        : {backgroundColor: `${t.error}15`, color: t.error, border: `1px solid ${t.error}`}),
+      backgroundColor: `${colorKey}15`,
+      color: colorKey,
+      border: `1px solid ${colorKey}`,
       marginTop: '16px',
     };
 
-    return m('div', {style}, [
-      this.testResult.success
-        ? m('span', `✅ Connection successful${this.testResult.latencyMs ? ` (${this.testResult.latencyMs}ms)` : ''}`)
-        : m('span', `❌ Connection failed: ${this.testResult.error || 'Unknown error'}`),
-    ]);
+    let message: string;
+    if (!this.testResult.success) {
+      message = `❌ ${this.testResult.error || 'Connection failed'}`;
+    } else if (isWarning) {
+      message = `⚠️ Connected (${this.testResult.latencyMs}ms) — ${this.testResult.error}`;
+    } else {
+      const verified = this.testResult.modelVerified ? ', model verified' : '';
+      message = `✅ Connection successful (${this.testResult.latencyMs}ms${verified})`;
+    }
+
+    return m('div', {style}, m('span', message));
   }
 
   private renderEffectiveConfig(): m.Children {
@@ -399,9 +603,22 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
 
     if (!this.providers.some((p) => p.isActive)) return null;
 
-    return m('div', {style: s.effectiveSection}, [
+    return m('div', {style: {
+      position: 'absolute' as const,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: t.bg,
+      borderTop: `1px solid ${t.border}`,
+      borderRadius: '0 0 8px 8px',
+      zIndex: 10,
+    }}, [
       m('div', {
-        style: s.effectiveHeader,
+        style: {
+          ...s.effectiveHeader,
+          padding: '10px 20px',
+          cursor: 'pointer',
+        },
         onclick: () => {
           this.effectiveExpanded = !this.effectiveExpanded;
           if (this.effectiveExpanded && !this.effectiveConfig) {
@@ -410,9 +627,14 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
         },
       }, [
         m('span', {style: {fontSize: '13px', fontWeight: 600, color: t.text}}, 'Effective Configuration'),
-        m('span', {style: {fontSize: '11px', color: t.textMuted}}, this.effectiveExpanded ? '▼' : '▶'),
+        m('span', {style: {fontSize: '11px', color: t.textMuted, transition: 'transform 0.15s ease', display: 'inline-block', transform: this.effectiveExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}}, '▲'),
       ]),
-      this.effectiveExpanded ? this.renderEffectiveBody() : null,
+      this.effectiveExpanded ? m('div', {style: {
+        maxHeight: '200px',
+        overflowY: 'auto' as const,
+        padding: '0 20px 12px',
+        animation: 'fadeSlideIn 0.15s ease-out',
+      }}, [this.renderEffectiveBody()]) : null,
     ]);
   }
 

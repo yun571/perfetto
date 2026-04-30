@@ -408,10 +408,10 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 6px;
+  padding: 12px 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -478,7 +478,7 @@
 
 .ai-message {
   display: flex;
-  gap: 6px;
+  gap: 0;
   max-width: 100%;
   animation: messageSlideIn 0.2s ease-out;
 
@@ -498,15 +498,6 @@
   gap: 4px;
   max-width: 88%;
   animation-duration: 0.15s;
-
-  .ai-avatar {
-    width: 20px;
-    height: 20px;
-
-    .pf-icon {
-      font-size: 12px;
-    }
-  }
 }
 
 @keyframes messageSlideIn {
@@ -538,38 +529,31 @@
   animation: revealBlock 0.3s ease-out forwards;
 }
 
-// Avatar - compact for height efficiency
+// Avatar - hidden (avatarless layout)
 .ai-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 600;
-
-  .pf-icon {
-    font-size: 14px;
-  }
+  display: none;
 }
 
 .ai-avatar-user {
-  background: var(--chat-gradient);
-  color: white;
+  display: none;
 }
 
 .ai-avatar-assistant {
-  background: var(--chat-bg-tertiary);
-  color: var(--chat-primary);
-  border: 1px solid var(--chat-border);
+  display: none;
+}
 
-  .pf-icon {
-    background: var(--chat-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+// Wrapper for bubble + model-badge (stacks vertically)
+.ai-bubble-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  .ai-message-user & {
+    align-items: flex-end;
+  }
+
+  .ai-message-assistant & {
+    align-items: flex-start;
   }
 }
 
@@ -585,7 +569,7 @@
 .ai-msg-content,
 .ai-bubble {
   padding: 6px 10px;
-  border-radius: 10px;
+  border-radius: 6px;
   word-wrap: break-word;
   overflow-wrap: anywhere;
   position: relative;
@@ -597,14 +581,14 @@
   .ai-message-user & {
     background: var(--chat-user-bubble);
     color: var(--chat-user-text);
-    border-radius: 10px 10px 4px 10px;
+    border-radius: 6px;
     box-shadow: var(--chat-shadow-sm);
   }
 
   .ai-message-assistant & {
     background: var(--chat-ai-bubble);
     border: 1px solid var(--chat-ai-border);
-    border-radius: 10px 10px 10px 4px;
+    border-radius: 6px;
     color: var(--chat-text);
   }
 }
@@ -613,14 +597,14 @@
 .ai-bubble-user {
   background: var(--chat-user-bubble) !important;
   color: var(--chat-user-text) !important;
-  border-radius: 14px 14px 4px 14px !important;
+  border-radius: 6px !important;
   box-shadow: var(--chat-shadow-sm);
 }
 
 .ai-bubble-assistant {
   background: var(--chat-ai-bubble) !important;
   border: 1px solid var(--chat-ai-border) !important;
-  border-radius: 14px 14px 14px 4px !important;
+  border-radius: 6px !important;
   color: var(--chat-text) !important;
 }
 
@@ -808,7 +792,7 @@
   padding: 8px 12px;
   background: var(--chat-ai-bubble);
   border: 1px solid var(--chat-ai-border);
-  border-radius: 14px 14px 14px 4px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1039,7 +1023,7 @@
   padding: 4px 4px 4px 12px;
   background: var(--chat-bg-secondary);
   border: 1px solid var(--chat-border);
-  border-radius: 18px;
+  border-radius: 6px;
   transition: all 0.15s ease;
 
   &:focus-within {
@@ -1083,7 +1067,7 @@
   // rest of the Perfetto chrome around it.
   background: var(--chat-solid-primary);
   border: none;
-  border-radius: 50%;
+  border-radius: 6px;
   color: var(--chat-user-text);
   cursor: pointer;
   transition: filter 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
@@ -1129,6 +1113,13 @@
       box-shadow: var(--chat-shadow-md);
     }
   }
+}
+
+.ai-input-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--chat-border);
+  flex-shrink: 0;
 }
 
 @keyframes spin {
@@ -1237,7 +1228,16 @@
   }
 }
 
-// Feedback buttons — thumbs up/down on assistant messages
+// Model change annotation — plain muted text, no bubble
+.ai-model-badge {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--chat-text-muted, #888);
+  text-align: right;
+}
+
 .ai-feedback-bar {
   display: flex;
   gap: 4px;
@@ -1941,6 +1941,17 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
