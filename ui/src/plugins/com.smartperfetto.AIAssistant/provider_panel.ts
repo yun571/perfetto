@@ -332,7 +332,7 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
       ]),
 
       m('div', {style: s.cardModels}, [
-        m('div', `Primary: ${provider.models.primary}`),
+        m('div', `Model: ${provider.models.primary}`),
         m('div', `Light: ${provider.models.light}`),
         provider.models.subAgent
           ? m('div', `Sub-agent: ${provider.models.subAgent}`)
