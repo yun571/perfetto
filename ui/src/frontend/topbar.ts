@@ -23,6 +23,9 @@ import {Button} from '../widgets/button';
 import {Intent} from '../widgets/common';
 import {Popup, PopupPosition} from '../widgets/popup';
 import {Omnibox} from './omnibox';
+import {isTimelineRouteActive} from './timeline_route';
+
+const AI_ASSISTANT_OPEN_COMMAND = 'com.smartperfetto.AIAssistant.OpenPanel';
 
 class TraceErrorIcon implements m.ClassComponent<TraceImplAttrs> {
   private tracePopupErrorDismissed = false;
@@ -85,7 +88,29 @@ export class Topbar implements m.ClassComponent<TopbarAttrs> {
         ),
       },
       m(Omnibox, {trace}),
+      this.renderAIAssistantEntry(trace),
       trace && m(TraceErrorIcon, {trace}),
+    );
+  }
+
+  private renderAIAssistantEntry(trace: TraceImpl | undefined): m.Children {
+    if (!trace || !isTimelineRouteActive()) return null;
+    const commands = AppImpl.instance.commands;
+    if (!commands.hasCommand(AI_ASSISTANT_OPEN_COMMAND)) return null;
+    return m(
+      '.pf-topbar__ai-entry-box',
+      m(
+        'button.pf-topbar__ai-entry',
+        {
+          title: '打开 AI Assistant',
+          onclick: (e: MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            commands.runCommand(AI_ASSISTANT_OPEN_COMMAND);
+          },
+        },
+        'AI',
+      ),
     );
   }
 }

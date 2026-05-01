@@ -288,7 +288,9 @@ export class Omnibox implements m.ClassComponent<OmniboxAttrs> {
           this.omniboxInputEl.blur();
         }
       },
-      rightContent: trace && this.renderStepThrough(trace),
+      rightContent: m('.pf-omnibox__right-content', [
+        trace && this.renderStepThrough(trace),
+      ]),
     });
   }
 

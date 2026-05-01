@@ -40,5 +40,6 @@
     // --pf-right-rail-width on documentElement; the page area shrinks to make
     // room while topbar and statusbar stay full-width.
     margin-right: var(--pf-right-rail-width, 0px);
+    margin-bottom: var(--pf-bottom-rail-height, 0px);
   }
 }

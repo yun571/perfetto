@@ -22,39 +22,49 @@ import {AIPanel} from './ai_panel';
 import {
   clamp,
   getFloatingState,
+  SIDEBAR_MIN_HEIGHT,
   SIDEBAR_MIN_WIDTH,
   toggleSidebarCollapsed,
   updateFloatingState,
 } from './ai_floating_state';
-import {switchFloatingMode} from './ai_transient_state';
 import {getAISharedState} from './ai_shared_state';
 
 // ── Constants ──────────────────────────────────────────────────────────
 
-const BTN_BG_IDLE = 'rgba(255,255,255,0.12)';
-const BTN_BG_HOVER = 'rgba(255,255,255,0.22)';
-
 // ── Resize gesture ─────────────────────────────────────────────────────
 
 let resizeActive = false;
+let resizeAxis: 'x' | 'y' = 'x';
 let resizeStartX = 0;
+let resizeStartY = 0;
 let resizeStartWidth = 0;
+let resizeStartHeight = 0;
 let rafId = 0;
 
 /** Last mouse position during resize — committed synchronously on mouseup. */
 let lastResizeClientX = 0;
+let lastResizeClientY = 0;
 
 function onResizeMove(e: MouseEvent): void {
   if (!resizeActive) return;
   lastResizeClientX = e.clientX;
+  lastResizeClientY = e.clientY;
   // Cancel any pending rAF to avoid stacking updates (Codex #5).
   if (rafId) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(() => {
-    // Dragging left (negative dx) → wider sidebar.
-    const dx = resizeStartX - e.clientX;
-    const maxW = Math.floor(window.innerWidth * 0.5);
-    const newWidth = clamp(resizeStartWidth + dx, SIDEBAR_MIN_WIDTH, maxW);
-    updateFloatingState({sidebar: {width: newWidth, collapsed: false}});
+    if (resizeAxis === 'y') {
+      // Dragging up (negative dy) → taller bottom dock.
+      const dy = resizeStartY - e.clientY;
+      const maxH = Math.floor(window.innerHeight * 0.6);
+      const newHeight = clamp(resizeStartHeight + dy, SIDEBAR_MIN_HEIGHT, maxH);
+      updateFloatingState({sidebar: {height: newHeight, collapsed: false}});
+    } else {
+      // Dragging left (negative dx) → wider sidebar.
+      const dx = resizeStartX - e.clientX;
+      const maxW = Math.floor(window.innerWidth * 0.5);
+      const newWidth = clamp(resizeStartWidth + dx, SIDEBAR_MIN_WIDTH, maxW);
+      updateFloatingState({sidebar: {width: newWidth, collapsed: false}});
+    }
   });
 }
 
@@ -69,10 +79,17 @@ function onResizeEnd(): void {
   // have fired yet, so without this the sidebar snaps to the second-to-last
   // reported position.
   if (resizeActive) {
-    const dx = resizeStartX - lastResizeClientX;
-    const maxW = Math.floor(window.innerWidth * 0.5);
-    const newWidth = clamp(resizeStartWidth + dx, SIDEBAR_MIN_WIDTH, maxW);
-    updateFloatingState({sidebar: {width: newWidth, collapsed: false}});
+    if (resizeAxis === 'y') {
+      const dy = resizeStartY - lastResizeClientY;
+      const maxH = Math.floor(window.innerHeight * 0.6);
+      const newHeight = clamp(resizeStartHeight + dy, SIDEBAR_MIN_HEIGHT, maxH);
+      updateFloatingState({sidebar: {height: newHeight, collapsed: false}});
+    } else {
+      const dx = resizeStartX - lastResizeClientX;
+      const maxW = Math.floor(window.innerWidth * 0.5);
+      const newWidth = clamp(resizeStartWidth + dx, SIDEBAR_MIN_WIDTH, maxW);
+      updateFloatingState({sidebar: {width: newWidth, collapsed: false}});
+    }
   }
   resizeActive = false;
   if (rafId) {
@@ -92,9 +109,13 @@ function startResize(e: MouseEvent): void {
   e.stopPropagation();
   if (resizeActive) onResizeEnd();
   const s = getFloatingState();
+  resizeAxis = s.sidebar.layout === 'bottom' ? 'y' : 'x';
   resizeStartX = e.clientX;
+  resizeStartY = e.clientY;
   lastResizeClientX = e.clientX;
+  lastResizeClientY = e.clientY;
   resizeStartWidth = s.sidebar.width;
+  resizeStartHeight = s.sidebar.height;
   resizeActive = true;
   document.addEventListener('mousemove', onResizeMove);
   document.addEventListener('mouseup', onResizeEnd);
@@ -115,7 +136,7 @@ export class SidebarPanel implements m.ClassComponent<SidebarPanelAttrs> {
     if (s.sidebar.collapsed) {
       return this.renderCollapsed();
     }
-    return this.renderExpanded(attrs.trace, s.sidebar.width);
+    return this.renderExpanded(attrs.trace, s.sidebar.width, s.sidebar.height, s.sidebar.layout);
   }
 
   onremove(): void {
@@ -143,28 +164,19 @@ export class SidebarPanel implements m.ClassComponent<SidebarPanelAttrs> {
 
   // ── Expanded panel ─────────────────────────────────────────────────
 
-  private renderExpanded(trace: Trace, width: number): m.Children {
-    return m('.ai-sidebar-expanded', {
-      style: `width: ${width}px;`,
+  private renderExpanded(
+    trace: Trace,
+    width: number,
+    height: number,
+    layout: 'right' | 'bottom',
+  ): m.Children {
+    return m(`.ai-sidebar-expanded.ai-sidebar-expanded--${layout}`, {
+      style: layout === 'bottom' ? `height: ${height}px;` : `width: ${width}px;`,
     }, [
-      // Left-edge resize handle
-      m('.ai-sidebar-resize-handle', {
+      m(`.ai-sidebar-resize-handle.ai-sidebar-resize-handle--${layout}`, {
         onmousedown: startResize,
-        title: '拖动调整宽度',
+        title: layout === 'bottom' ? '拖动调整高度' : '拖动调整宽度',
       }),
-
-      // Title bar
-      m('.ai-sidebar-titlebar', [
-        m('span.ai-sidebar-titlebar__icon', '\u{1F916}'),
-        m('span.ai-sidebar-titlebar__text', 'AI Assistant'),
-
-        // Collapse
-        this.renderBtn('chevron_right', '折叠侧边栏', () => toggleSidebarCollapsed()),
-        // Pop out to floating
-        this.renderBtn('open_in_new', '弹出为浮动窗口', () => switchFloatingMode('floating')),
-        // Dock back to tab
-        this.renderBtn('open_in_new_off', '收回到标签页', () => switchFloatingMode('tab')),
-      ]),
 
       // Content: AIPanel
       m('.ai-sidebar-content', m(AIPanel, {
@@ -172,20 +184,5 @@ export class SidebarPanel implements m.ClassComponent<SidebarPanelAttrs> {
         trace,
       })),
     ]);
-  }
-
-  // ── Button helper ──────────────────────────────────────────────────
-
-  private renderBtn(icon: string, title: string, onclick: () => void): m.Children {
-    return m('button.ai-sidebar-titlebar__btn', {
-      title,
-      onclick,
-      onmouseover: (e: MouseEvent) => {
-        (e.currentTarget as HTMLElement).style.background = BTN_BG_HOVER;
-      },
-      onmouseout: (e: MouseEvent) => {
-        (e.currentTarget as HTMLElement).style.background = BTN_BG_IDLE;
-      },
-    }, m(Icon, {icon, style: 'font-size: 14px'}));
   }
 }
