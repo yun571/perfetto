@@ -339,12 +339,17 @@ export interface AIPanelState {
   isReferenceActive: boolean; // Whether Perfetto is currently showing the reference trace
   showTracePicker: boolean; // Whether trace picker modal is visible
   comparisonTraceLoading: boolean; // Loading state for reference trace processor
-  // Story Panel state — Chat ↔ Story view switch
-  currentView: 'chat' | 'story';
+  // Story Panel state
   storyState: StoryPanelState;
   /** Analysis mode toggle: 'fast' (quick path) / 'full' (pipeline) / 'auto' (classifier-driven).
    *  Persisted in localStorage under ANALYSIS_MODE_KEY. */
   analysisMode: 'fast' | 'full' | 'auto';
+  /** Whether the compact analysis mode menu in the input bar is open. */
+  showAnalysisModeMenu: boolean;
+  /** Whether the conversation history sidebar is visible. */
+  showSessionSidebar: boolean;
+  /** Whether the Story panel is visible as a right sidebar. */
+  showStorySidebar: boolean;
   // Slice Selected card state
   sliceCardInfo: SliceCardInfo | null; // Queried slice metadata for the card
   areaCardInfo: AreaCardInfo | null; // Queried area metadata for the card
