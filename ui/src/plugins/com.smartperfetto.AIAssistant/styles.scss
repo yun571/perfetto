@@ -178,7 +178,8 @@
   overflow: hidden;
   background: var(--chat-bg);
   color: var(--chat-text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", sans-serif;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -254,8 +255,13 @@
 }
 
 @keyframes sse-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 .ai-status-text {
@@ -337,8 +343,13 @@
 }
 
 @keyframes selection-btn-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.85; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
 }
 
 // Teaching button — uses accent (mid blue) so it stays distinct from both
@@ -408,10 +419,10 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 6px;
+  padding: 12px 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -478,7 +489,7 @@
 
 .ai-message {
   display: flex;
-  gap: 6px;
+  gap: 0;
   max-width: 100%;
   animation: messageSlideIn 0.2s ease-out;
 
@@ -498,15 +509,6 @@
   gap: 4px;
   max-width: 88%;
   animation-duration: 0.15s;
-
-  .ai-avatar {
-    width: 20px;
-    height: 20px;
-
-    .pf-icon {
-      font-size: 12px;
-    }
-  }
 }
 
 @keyframes messageSlideIn {
@@ -538,38 +540,31 @@
   animation: revealBlock 0.3s ease-out forwards;
 }
 
-// Avatar - compact for height efficiency
+// Avatar - hidden (avatarless layout)
 .ai-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 600;
-
-  .pf-icon {
-    font-size: 14px;
-  }
+  display: none;
 }
 
 .ai-avatar-user {
-  background: var(--chat-gradient);
-  color: white;
+  display: none;
 }
 
 .ai-avatar-assistant {
-  background: var(--chat-bg-tertiary);
-  color: var(--chat-primary);
-  border: 1px solid var(--chat-border);
+  display: none;
+}
 
-  .pf-icon {
-    background: var(--chat-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+// Wrapper for bubble + model-badge (stacks vertically)
+.ai-bubble-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  .ai-message-user & {
+    align-items: flex-end;
+  }
+
+  .ai-message-assistant & {
+    align-items: flex-start;
   }
 }
 
@@ -585,7 +580,7 @@
 .ai-msg-content,
 .ai-bubble {
   padding: 6px 10px;
-  border-radius: 10px;
+  border-radius: 6px;
   word-wrap: break-word;
   overflow-wrap: anywhere;
   position: relative;
@@ -597,14 +592,14 @@
   .ai-message-user & {
     background: var(--chat-user-bubble);
     color: var(--chat-user-text);
-    border-radius: 10px 10px 4px 10px;
+    border-radius: 6px;
     box-shadow: var(--chat-shadow-sm);
   }
 
   .ai-message-assistant & {
     background: var(--chat-ai-bubble);
     border: 1px solid var(--chat-ai-border);
-    border-radius: 10px 10px 10px 4px;
+    border-radius: 6px;
     color: var(--chat-text);
   }
 }
@@ -613,14 +608,14 @@
 .ai-bubble-user {
   background: var(--chat-user-bubble) !important;
   color: var(--chat-user-text) !important;
-  border-radius: 14px 14px 4px 14px !important;
+  border-radius: 6px !important;
   box-shadow: var(--chat-shadow-sm);
 }
 
 .ai-bubble-assistant {
   background: var(--chat-ai-bubble) !important;
   border: 1px solid var(--chat-ai-border) !important;
-  border-radius: 14px 14px 14px 4px !important;
+  border-radius: 6px !important;
   color: var(--chat-text) !important;
 }
 
@@ -649,7 +644,8 @@
     font-size: 0.92em;
   }
 
-  ul, ol {
+  ul,
+  ol {
     margin: 2px 0;
   }
 
@@ -687,7 +683,7 @@
     color: var(--chat-code-text);
     padding: 2px 6px;
     border-radius: 4px;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+    font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", monospace;
     font-size: 0.9em;
 
     .ai-message-user & {
@@ -728,7 +724,8 @@
     }
   }
 
-  ul, ol {
+  ul,
+  ol {
     margin: 8px 0;
     padding-left: 20px;
   }
@@ -808,7 +805,7 @@
   padding: 8px 12px;
   background: var(--chat-ai-bubble);
   border: 1px solid var(--chat-ai-border);
-  border-radius: 14px 14px 14px 4px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -828,8 +825,14 @@
 }
 
 @keyframes cursorBlink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 .ai-typing-dots,
@@ -847,13 +850,21 @@
   background: var(--chat-primary);
   animation: dotBounce 1.4s infinite ease-in-out;
 
-  &:nth-child(1) { animation-delay: -0.32s; }
-  &:nth-child(2) { animation-delay: -0.16s; }
-  &:nth-child(3) { animation-delay: 0s; }
+  &:nth-child(1) {
+    animation-delay: -0.32s;
+  }
+  &:nth-child(2) {
+    animation-delay: -0.16s;
+  }
+  &:nth-child(3) {
+    animation-delay: 0s;
+  }
 }
 
 @keyframes dotBounce {
-  0%, 80%, 100% {
+  0%,
+  80%,
+  100% {
     transform: scale(0.6);
     opacity: 0.4;
   }
@@ -870,7 +881,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: calc(100% - 40px);  // Adapt to bubble width minus dots
+  max-width: calc(100% - 40px); // Adapt to bubble width minus dots
   align-self: center;
   opacity: 0.85;
 }
@@ -920,7 +931,9 @@
   line-height: 1;
   padding: 0 2px;
 
-  &:hover { color: #374151; }
+  &:hover {
+    color: #374151;
+  }
 }
 
 .sp-sel-card-meta {
@@ -942,7 +955,9 @@
   color: #1e40af;
   white-space: nowrap;
 
-  strong { font-weight: 600; }
+  strong {
+    font-weight: 600;
+  }
 }
 
 .sp-sel-card-actions {
@@ -962,7 +977,10 @@
   transition: background 0.15s;
   white-space: nowrap;
 
-  &:disabled { opacity: 0.4; cursor: default; }
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
 }
 
 .sp-action-btn--primary {
@@ -970,7 +988,9 @@
   color: #fff;
   border-color: #2563eb;
 
-  &:hover:not(:disabled) { background: #1d4ed8; }
+  &:hover:not(:disabled) {
+    background: #1d4ed8;
+  }
 }
 
 .sp-action-btn--secondary {
@@ -978,7 +998,9 @@
   color: #1e40af;
   border-color: #bfdbfe;
 
-  &:hover:not(:disabled) { background: #dbeafe; }
+  &:hover:not(:disabled) {
+    background: #dbeafe;
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -1010,7 +1032,10 @@
   border: 1px solid var(--chat-border);
   border-radius: 12px;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
 
   &:hover:not(:disabled):not(.active) {
     border-color: var(--chat-primary);
@@ -1039,7 +1064,7 @@
   padding: 4px 4px 4px 12px;
   background: var(--chat-bg-secondary);
   border: 1px solid var(--chat-border);
-  border-radius: 18px;
+  border-radius: 6px;
   transition: all 0.15s ease;
 
   &:focus-within {
@@ -1083,10 +1108,13 @@
   // rest of the Perfetto chrome around it.
   background: var(--chat-solid-primary);
   border: none;
-  border-radius: 50%;
+  border-radius: 6px;
   color: var(--chat-user-text);
   cursor: pointer;
-  transition: filter 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition:
+    filter 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
   flex-shrink: 0;
 
   .pf-icon {
@@ -1131,9 +1159,20 @@
   }
 }
 
+.ai-input-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--chat-border);
+  flex-shrink: 0;
+}
+
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .ai-input-hint {
@@ -1190,8 +1229,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 // Inline disconnect banner — shown inside messages area when backend drops mid-conversation
@@ -1237,7 +1281,16 @@
   }
 }
 
-// Feedback buttons — thumbs up/down on assistant messages
+// Model change annotation — plain muted text, no bubble
+.ai-model-badge {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--chat-text-muted, #888);
+  text-align: right;
+}
+
 .ai-feedback-bar {
   display: flex;
   gap: 4px;
@@ -1431,7 +1484,7 @@
   padding: 6px 10px;
   background: var(--chat-bg-tertiary);
   border-bottom: 1px solid var(--chat-border);
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", monospace;
   font-size: 11px;
   color: var(--chat-text-secondary);
   white-space: pre-wrap;
@@ -1468,7 +1521,11 @@
 .sql-result-table {
   width: 100%;
   border-collapse: collapse;
-  font-family: 'Roboto', 'Roboto Condensed', -apple-system, sans-serif;
+  font-family:
+    "Roboto",
+    "Roboto Condensed",
+    -apple-system,
+    sans-serif;
   font-size: 12px;
   line-height: 1.4;
   table-layout: fixed; // Fixed layout for consistent column widths
@@ -1552,7 +1609,7 @@
   .timestamp-cell {
     color: var(--pf-color-accent);
     cursor: pointer;
-    font-family: 'Roboto Mono', 'SF Mono', monospace;
+    font-family: "Roboto Mono", "SF Mono", monospace;
     font-size: 10px;
     max-width: 100px;
 
@@ -1567,7 +1624,7 @@
   .entity-cell {
     color: var(--chat-entity-color);
     cursor: pointer;
-    font-family: 'Roboto Mono', 'SF Mono', monospace;
+    font-family: "Roboto Mono", "SF Mono", monospace;
     font-size: 10px;
     max-width: 100px;
 
@@ -1582,7 +1639,7 @@
   .col-duration,
   .col-count,
   .number-cell {
-    font-family: 'Roboto Mono', 'SF Mono', Monaco, monospace;
+    font-family: "Roboto Mono", "SF Mono", Monaco, monospace;
     font-size: 10px;
     text-align: right;
     color: var(--chat-text);
@@ -1612,7 +1669,6 @@
     max-width: 100px;
   }
 }
-
 
 // Statistics section
 .sql-result-stats {
@@ -1649,7 +1705,7 @@
     font-size: 12px;
     font-weight: 600;
     color: var(--chat-text);
-    font-family: 'Roboto Mono', monospace;
+    font-family: "Roboto Mono", monospace;
   }
 }
 
@@ -1739,7 +1795,8 @@
     min-width: 300px; // Minimum width for consistent appearance
     table-layout: fixed; // Fixed layout to prevent column header wrapping
 
-    th, td {
+    th,
+    td {
       padding: 3px 6px;
       font-size: 10px;
       white-space: nowrap;
@@ -1843,7 +1900,7 @@
 
         .metadata-value {
           color: var(--chat-text);
-          font-family: 'Roboto Mono', monospace;
+          font-family: "Roboto Mono", monospace;
         }
       }
     }
@@ -1929,8 +1986,12 @@
 // ----------------------------------------------------------------------------
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
@@ -1941,6 +2002,17 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
@@ -2048,10 +2120,18 @@
   }
 
   // Type-specific colors
-  &.type-jank .pf-icon { color: var(--chat-warning); }
-  &.type-anr .pf-icon { color: var(--chat-error); }
-  &.type-slow_function .pf-icon { color: var(--chat-warning); }
-  &.type-binder_slow .pf-icon { color: var(--chat-primary); }
+  &.type-jank .pf-icon {
+    color: var(--chat-warning);
+  }
+  &.type-anr .pf-icon {
+    color: var(--chat-error);
+  }
+  &.type-slow_function .pf-icon {
+    color: var(--chat-warning);
+  }
+  &.type-binder_slow .pf-icon {
+    color: var(--chat-primary);
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -2195,7 +2275,7 @@
     color: var(--chat-text-secondary);
     padding: 2px 4px;
     border-radius: 3px;
-    font-family: 'SF Mono', Monaco, monospace;
+    font-family: "SF Mono", Monaco, monospace;
     font-size: 10px;
   }
 }
@@ -2209,7 +2289,7 @@
   margin-top: 12px;
 
   &::after {
-    content: '';
+    content: "";
     display: block;
     width: 40%;
     height: 100%;
@@ -2315,7 +2395,7 @@
     cursor: default;
 
     &::before {
-      content: '';
+      content: "";
       position: absolute;
       left: 0;
       top: 0;
@@ -2371,7 +2451,7 @@
 
   &::before,
   &::after {
-    content: '';
+    content: "";
     flex: 1;
     height: 1px;
     background: var(--chat-border);
@@ -2489,7 +2569,7 @@
       color: var(--chat-code-text);
       padding: 2px 6px;
       border-radius: 4px;
-      font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+      font-family: "SF Mono", "Monaco", "Inconsolata", monospace;
       font-size: 12px;
     }
   }
@@ -2690,7 +2770,7 @@ tr.detail-row {
   transition: all 0.2s ease;
 
   &::before {
-    content: '⏱️ ';
+    content: "⏱️ ";
     font-size: 0.85em;
   }
 
@@ -2788,7 +2868,8 @@ tr.detail-row {
     border-radius: 6px;
     overflow: hidden;
 
-    th, td {
+    th,
+    td {
       padding: 4px 8px;
       text-align: left;
       border-bottom: 1px solid var(--chat-border-light);
@@ -2819,7 +2900,7 @@ tr.detail-row {
     td:nth-child(2),
     td:nth-child(3) {
       text-align: right;
-      font-family: 'Roboto Mono', monospace;
+      font-family: "Roboto Mono", monospace;
       font-size: 11px;
     }
   }
@@ -2924,7 +3005,7 @@ tr.detail-row {
     padding: 10px 12px;
     background: var(--chat-bg-secondary);
     border-top: 1px solid var(--chat-border);
-    font-family: 'Roboto Mono', monospace;
+    font-family: "Roboto Mono", monospace;
     font-size: 11px;
     line-height: 1.4;
     white-space: pre;
@@ -2996,14 +3077,49 @@ tr.detail-row {
   font-size: 0.8em;
   font-weight: 500;
 
-  &.critical { @include severity-badge(var(--pf-color-danger),  18%, var(--pf-color-danger)); }
-  &.high     { @include severity-badge(var(--pf-color-danger),  12%, color-mix(in srgb, var(--pf-color-danger) 85%, var(--pf-color-text))); }
-  &.warning  { @include severity-badge(var(--pf-color-warning), 18%, shade(var(--pf-color-warning), 85%)); }
-  &.medium   { @include severity-badge(var(--pf-color-warning), 12%, shade(var(--pf-color-warning), 85%)); }
-  &.info     { @include severity-badge(var(--pf-color-accent),  12%, var(--pf-color-accent)); }
-  &.low      { @include severity-badge(var(--pf-color-success), 12%, var(--pf-color-success)); }
+  &.critical {
+    @include severity-badge(
+      var(--pf-color-danger),
+      18%,
+      var(--pf-color-danger)
+    );
+  }
+  &.high {
+    @include severity-badge(
+      var(--pf-color-danger),
+      12%,
+      color-mix(in srgb, var(--pf-color-danger) 85%, var(--pf-color-text))
+    );
+  }
+  &.warning {
+    @include severity-badge(
+      var(--pf-color-warning),
+      18%,
+      shade(var(--pf-color-warning), 85%)
+    );
+  }
+  &.medium {
+    @include severity-badge(
+      var(--pf-color-warning),
+      12%,
+      shade(var(--pf-color-warning), 85%)
+    );
+  }
+  &.info {
+    @include severity-badge(
+      var(--pf-color-accent),
+      12%,
+      var(--pf-color-accent)
+    );
+  }
+  &.low {
+    @include severity-badge(
+      var(--pf-color-success),
+      12%,
+      var(--pf-color-success)
+    );
+  }
 }
-
 
 // ----------------------------------------------------------------------------
 // Scene Navigation Bar
@@ -3582,7 +3698,11 @@ tr.detail-row {
   transition: background 0.15s;
 
   &:hover {
-    background: color-mix(in srgb, var(--pf-sidebar-surface, #262f3c) 85%, white);
+    background: color-mix(
+      in srgb,
+      var(--pf-sidebar-surface, #262f3c) 85%,
+      white
+    );
   }
 }
 
@@ -3599,8 +3719,13 @@ tr.detail-row {
 }
 
 @keyframes ai-sidebar-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 // Expanded panel — full sidebar with titlebar, content, resize handle.
@@ -3613,7 +3738,9 @@ tr.detail-row {
   display: flex;
   flex-direction: column;
   background: var(--pf-color-background, #ffffff);
-  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12), -1px 0 0 rgba(0, 0, 0, 0.06);
+  box-shadow:
+    -4px 0 16px rgba(0, 0, 0, 0.12),
+    -1px 0 0 rgba(0, 0, 0, 0.06);
   // The .ai-panel token cascade is needed because AIPanel renders inside here.
   // The sidebar expanded root also acts as .ai-panel's ancestor for CSS variable
   // resolution, but AIPanel already self-injects its tokens on .ai-panel, so no
