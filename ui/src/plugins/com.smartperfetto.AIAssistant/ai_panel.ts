@@ -22,7 +22,10 @@ import {SettingsModal} from './settings_modal';
 import {ProviderQuickSwitcher} from './provider_switcher';
 import {SqlResultTable, UserInteraction} from './sql_result_table';
 import {ChartVisualizer} from './chart_visualizer';
-import {NavigationBookmarkBar, NavigationBookmark} from './navigation_bookmark_bar';
+import {
+  NavigationBookmarkBar,
+  NavigationBookmark,
+} from './navigation_bookmark_bar';
 import {SceneNavigationBar} from './scene_navigation_bar';
 import {
   getActivityHintFromBufferTxTrackName,
@@ -70,17 +73,15 @@ import {
   TraceDataset,
 } from './types';
 // Agent-Driven Architecture v2.0 - Intervention Panel
-import {InterventionPanel, DEFAULT_INTERVENTION_STATE} from './intervention_panel';
 import {
-  decodeBase64Unicode,
-  formatMessage,
-} from './data_formatter';
+  InterventionPanel,
+  DEFAULT_INTERVENTION_STATE,
+} from './intervention_panel';
+import {decodeBase64Unicode, formatMessage} from './data_formatter';
 import {sessionManager} from './session_manager';
 import {mermaidRenderer} from './mermaid_renderer';
 import {buildAssistantApiV1Url} from './assistant_api_v1';
-import {
-  clearComparisonState,
-} from './comparison_state_manager';
+import {clearComparisonState} from './comparison_state_manager';
 import {
   handleSSEEvent as handleSSEEventExternal,
   SSEHandlerContext,
@@ -94,7 +95,11 @@ import {
 import {SCENE_DISPLAY_NAMES} from './scene_constants';
 import {StoryController, StoryControllerContext} from './story_controller';
 // AI Everywhere: cross-component shared state + timeline notes
-import {updateAISharedState, resetAISharedState, getAISharedState} from './ai_shared_state';
+import {
+  updateAISharedState,
+  resetAISharedState,
+  getAISharedState,
+} from './ai_shared_state';
 import {addBookmarkNotes, clearAIFindingNotes} from './ai_timeline_notes';
 import {
   TransientState,
@@ -109,7 +114,10 @@ const DEBUG_AI_PANEL = false;
 // Metric card palette keyed by status. Extracted from a triple-ternary that
 // repeated the four intent mappings three times (bg / fg / icon name). The
 // `info` entry doubles as the default for unknown status values.
-const METRIC_STATUS_STYLES: Record<string, {bg: string; fg: string; icon: string}> = {
+const METRIC_STATUS_STYLES: Record<
+  string,
+  {bg: string; fg: string; icon: string}
+> = {
   good: {
     bg: 'var(--chat-metric-bg-good)',
     fg: 'var(--chat-success)',
@@ -132,8 +140,15 @@ const METRIC_STATUS_STYLES: Record<string, {bg: string; fg: string; icon: string
   },
 };
 
-function metricStatusStyle(status: string | undefined): {bg: string; fg: string; icon: string} {
-  return (status ? METRIC_STATUS_STYLES[status] : undefined) ?? METRIC_STATUS_STYLES.info;
+function metricStatusStyle(status: string | undefined): {
+  bg: string;
+  fg: string;
+  icon: string;
+} {
+  return (
+    (status ? METRIC_STATUS_STYLES[status] : undefined) ??
+    METRIC_STATUS_STYLES.info
+  );
 }
 
 export interface AIPanelAttrs {
@@ -142,15 +157,24 @@ export interface AIPanelAttrs {
 }
 
 // Re-export types for backward compatibility with external consumers
-export {Message, SqlQueryResult, AISettings, AISession, PinnedResult, ServerStatus} from './types';
+export {
+  Message,
+  SqlQueryResult,
+  AISettings,
+  AISession,
+  PinnedResult,
+  ServerStatus,
+} from './types';
 
 // Inline style objects cannot resolve CSS custom properties for dark mode;
 // all visual tokens live in styles.scss so the --chat-* cascade handles theming.
 
 /** Detect system dark mode preference. Updates reactively when user toggles OS theme. */
 function detectDarkMode(): boolean {
-  return typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-color-scheme: dark)').matches === true;
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-color-scheme: dark)').matches === true
+  );
 }
 
 export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
@@ -171,17 +195,17 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     lastQuery: '',
     pinnedResults: [],
     backendTraceId: null,
-    bookmarks: [],  // 初始化为空数组
-    currentTraceFingerprint: null,  // 当前 Trace 指纹
-    currentSessionId: null,  // 当前 Session ID
-    isRetryingBackend: false,  // 正在重试连接后端
-    retryError: null,  // 重试连接的错误信息
-    agentSessionId: null,  // Agent 多轮对话 Session ID
+    bookmarks: [], // 初始化为空数组
+    currentTraceFingerprint: null, // 当前 Trace 指纹
+    currentSessionId: null, // 当前 Session ID
+    isRetryingBackend: false, // 正在重试连接后端
+    retryError: null, // 重试连接的错误信息
+    agentSessionId: null, // Agent 多轮对话 Session ID
     agentRunId: null,
     agentRequestId: null,
     agentRunSequence: 0,
-    displayedSkillProgress: new Set(),  // 已显示的 skill 进度
-    completionHandled: false,  // 分析完成事件是否已处理
+    displayedSkillProgress: new Set(), // 已显示的 skill 进度
+    completionHandled: false, // 分析完成事件是否已处理
     // SSE Connection State Initialization
     sseConnectionState: 'disconnected',
     sseRetryCount: 0,
@@ -215,8 +239,11 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     analysisMode: (() => {
       try {
         const stored = localStorage.getItem('ai-analysis-mode');
-        if (stored === 'fast' || stored === 'full' || stored === 'auto') return stored;
-      } catch { /* ignore — private browsing or storage quota */ }
+        if (stored === 'fast' || stored === 'full' || stored === 'auto')
+          return stored;
+      } catch {
+        /* ignore — private browsing or storage quota */
+      }
       return 'auto';
     })(),
     // Slice Selected card
@@ -230,11 +257,17 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
   private unsubscribeClearChat?: () => void;
   private unsubscribeOpenSettings?: () => void;
   private unsubscribeBackendUpload?: () => void;
-  private lastBackendUploadState: BackendUploadSnapshot = getBackendUploadState();
+  private lastBackendUploadState: BackendUploadSnapshot =
+    getBackendUploadState();
   private messagesContainer: HTMLElement | null = null;
   private lastMessageCount = 0;
   private scrollThrottleTimer: ReturnType<typeof setTimeout> | null = null;
-  private availableTraces: Array<{id: string; originalName?: string; uploadedAt?: string; size?: number}> = [];
+  private availableTraces: Array<{
+    id: string;
+    originalName?: string;
+    uploadedAt?: string;
+    size?: number;
+  }> = [];
   // Debounced session save (P1-8): coalesce rapid addMessage() calls
   private saveSessionTimer: ReturnType<typeof setTimeout> | null = null;
   private beforeUnloadHandler: (() => void) | null = null;
@@ -346,27 +379,37 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     const appBackendUploadState = backendUploadState.state;
     const appBackendUploadError = backendUploadState.error;
 
-    if (DEBUG_AI_PANEL) console.log('[AIPanel] Trace fingerprint check:', {
-      new: newFingerprint,
-      current: this.state.currentTraceFingerprint,
-      backendTraceId: this.state.backendTraceId,
-      appBackendTraceId,
-      appBackendUploadState,
-      appBackendUploadError,
-      engineMode: this.engine?.mode,
-      engineInRpcMode,
-    });
+    if (DEBUG_AI_PANEL)
+      console.log('[AIPanel] Trace fingerprint check:', {
+        new: newFingerprint,
+        current: this.state.currentTraceFingerprint,
+        backendTraceId: this.state.backendTraceId,
+        appBackendTraceId,
+        appBackendUploadState,
+        appBackendUploadError,
+        engineMode: this.engine?.mode,
+        engineInRpcMode,
+      });
 
     // If upload already completed, reuse the backend trace id.
     if (appBackendTraceId && !this.state.backendTraceId) {
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Using backendTraceId from auto-upload:', appBackendTraceId);
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] Using backendTraceId from auto-upload:',
+          appBackendTraceId,
+        );
       this.state.backendTraceId = appBackendTraceId;
       // Don't call detectScenesQuick() here — defer to after welcome message below
     }
 
     // 如果指纹没变且已经有 session，不需要重新加载
-    if (newFingerprint && newFingerprint === this.state.currentTraceFingerprint && this.state.currentSessionId) {
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Same trace, keeping current session');
+    if (
+      newFingerprint &&
+      newFingerprint === this.state.currentTraceFingerprint &&
+      this.state.currentSessionId
+    ) {
+      if (DEBUG_AI_PANEL)
+        console.log('[AIPanel] Same trace, keeping current session');
       // 如果在 RPC 模式但没有 backendTraceId，尝试自动注册
       if (engineInRpcMode && !this.state.backendTraceId) {
         this.autoRegisterWithBackend();
@@ -392,11 +435,22 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     const THIRTY_MINUTES = 30 * 60 * 1000;
     const now = Date.now();
     const restorable = recentSessions
-      .filter(s => s.messages.length > 0 && (now - (s.lastActiveAt || s.createdAt)) < THIRTY_MINUTES)
-      .sort((a, b) => (b.lastActiveAt || b.createdAt) - (a.lastActiveAt || a.createdAt));
+      .filter(
+        (s) =>
+          s.messages.length > 0 &&
+          now - (s.lastActiveAt || s.createdAt) < THIRTY_MINUTES,
+      )
+      .sort(
+        (a, b) =>
+          (b.lastActiveAt || b.createdAt) - (a.lastActiveAt || a.createdAt),
+      );
 
     if (restorable.length > 0) {
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Auto-restoring recent session:', restorable[0].sessionId);
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] Auto-restoring recent session:',
+          restorable[0].sessionId,
+        );
       // Preserve backendTraceId from upload state — loadSession may clear it
       const savedBackendTraceId = this.state.backendTraceId;
       this.loadSession(restorable[0].sessionId);
@@ -452,12 +506,22 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
    */
   private async autoRegisterWithBackend(): Promise<void> {
     const rpcPort = HttpRpcEngine.rpcPort;
-    if (DEBUG_AI_PANEL) console.log('[AIPanel] Auto-registering with backend, RPC port:', rpcPort);
+    if (DEBUG_AI_PANEL)
+      console.log(
+        '[AIPanel] Auto-registering with backend, RPC port:',
+        rpcPort,
+      );
 
     // First, check if there's a pending backendTraceId from a recent upload
-    const pendingTraceId = this.recoverPendingBackendTrace(parseInt(rpcPort, 10));
+    const pendingTraceId = this.recoverPendingBackendTrace(
+      parseInt(rpcPort, 10),
+    );
     if (pendingTraceId) {
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Recovered pending backend traceId:', pendingTraceId);
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] Recovered pending backend traceId:',
+          pendingTraceId,
+        );
       this.state.backendTraceId = pendingTraceId;
 
       this.addMessage({
@@ -474,20 +538,28 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
 
     try {
       // 调用后端 API 注册当前 RPC 连接
-      const response = await this.fetchBackend(`${this.state.settings.backendUrl}/api/traces/register-rpc`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          port: parseInt(rpcPort, 10),
-          traceName: this.trace?.traceInfo?.traceTitle || 'External RPC Trace',
-        }),
-      });
+      const response = await this.fetchBackend(
+        `${this.state.settings.backendUrl}/api/traces/register-rpc`,
+        {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            port: parseInt(rpcPort, 10),
+            traceName:
+              this.trace?.traceInfo?.traceTitle || 'External RPC Trace',
+          }),
+        },
+      );
 
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.traceId) {
           this.state.backendTraceId = data.traceId;
-          if (DEBUG_AI_PANEL) console.log('[AIPanel] Auto-registered with backend, traceId:', data.traceId);
+          if (DEBUG_AI_PANEL)
+            console.log(
+              '[AIPanel] Auto-registered with backend, traceId:',
+              data.traceId,
+            );
 
           this.addMessage({
             id: this.generateId(),
@@ -504,10 +576,14 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       }
 
       // 注册失败时，显示基本欢迎消息
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Auto-registration failed, showing welcome message');
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] Auto-registration failed, showing welcome message',
+        );
       this.addRpcModeWelcomeMessage();
     } catch (error) {
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Auto-registration error:', error);
+      if (DEBUG_AI_PANEL)
+        console.log('[AIPanel] Auto-registration error:', error);
       this.addRpcModeWelcomeMessage();
     }
   }
@@ -521,7 +597,8 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       return;
     }
 
-    if (DEBUG_AI_PANEL) console.log('[AIPanel] Manually retrying backend connection...');
+    if (DEBUG_AI_PANEL)
+      console.log('[AIPanel] Manually retrying backend connection...');
     this.state.isRetryingBackend = true;
     this.state.retryError = null;
     m.redraw();
@@ -532,13 +609,21 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       // 首先检查后端是否可用
       const backendAvailable = await uploader.checkAvailable();
       if (!backendAvailable) {
-        throw new Error('AI 后端服务未启动。请先运行 `cd backend && npm run dev` 启动后端服务。');
+        throw new Error(
+          'AI 后端服务未启动。请先运行 `cd backend && npm run dev` 启动后端服务。',
+        );
       }
 
       // 获取当前 Trace 的 source
-      const traceInfo = this.trace.traceInfo as unknown as {source: TraceSource};
+      const traceInfo = this.trace.traceInfo as unknown as {
+        source: TraceSource;
+      };
       const traceSource = traceInfo.source;
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Retrying with trace source type:', traceSource.type);
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] Retrying with trace source type:',
+          traceSource.type,
+        );
 
       // 尝试上传 Trace
       const uploadResult = await uploader.upload(traceSource);
@@ -547,7 +632,8 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
         throw new Error(uploadResult.error || '上传 Trace 失败');
       }
 
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Upload successful, port:', uploadResult.port);
+      if (DEBUG_AI_PANEL)
+        console.log('[AIPanel] Upload successful, port:', uploadResult.port);
 
       // 上传成功，需要重新加载 Trace 以使用新的 RPC 端口
       // 显示提示信息
@@ -575,7 +661,8 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
             }),
           );
         } catch (e) {
-          if (DEBUG_AI_PANEL) console.log('[AIPanel] Failed to store pending trace:', e);
+          if (DEBUG_AI_PANEL)
+            console.log('[AIPanel] Failed to store pending trace:', e);
         }
       }
 
@@ -586,7 +673,6 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       // 重置重试状态
       this.state.isRetryingBackend = false;
       m.redraw();
-
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[AIPanel] Retry backend connection failed:', errorMsg);
@@ -608,17 +694,19 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       const data = JSON.parse(stored);
 
       // Check if the stored data matches current port and is recent (within 60 seconds)
-      if (data.port === currentPort && (Date.now() - data.timestamp) < 60000) {
+      if (data.port === currentPort && Date.now() - data.timestamp < 60000) {
         // Clear the pending data after recovery
         localStorage.removeItem(PENDING_BACKEND_TRACE_KEY);
-        if (DEBUG_AI_PANEL) console.log('[AIPanel] Recovered and cleared pending backend trace');
+        if (DEBUG_AI_PANEL)
+          console.log('[AIPanel] Recovered and cleared pending backend trace');
         return data.traceId;
       }
 
       // If too old or port mismatch, clear it
-      if ((Date.now() - data.timestamp) > 60000) {
+      if (Date.now() - data.timestamp > 60000) {
         localStorage.removeItem(PENDING_BACKEND_TRACE_KEY);
-        if (DEBUG_AI_PANEL) console.log('[AIPanel] Cleared stale pending backend trace');
+        if (DEBUG_AI_PANEL)
+          console.log('[AIPanel] Cleared stale pending backend trace');
       }
 
       return null;
@@ -690,7 +778,11 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
         if (!isNewReadyState) return;
 
         this.state.backendTraceId = snapshot.traceId;
-        if (DEBUG_AI_PANEL) console.log('[AIPanel] Backend upload complete, traceId:', snapshot.traceId);
+        if (DEBUG_AI_PANEL)
+          console.log(
+            '[AIPanel] Backend upload complete, traceId:',
+            snapshot.traceId,
+          );
         this.addMessage({
           id: this.generateId(),
           role: 'assistant',
@@ -712,7 +804,10 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
           previous.state !== 'failed' || previous.error !== snapshot.error;
         if (!isNewFailedState) return;
 
-        console.warn('[AIPanel] Backend upload failed:', snapshot.error ?? 'unknown error');
+        console.warn(
+          '[AIPanel] Backend upload failed:',
+          snapshot.error ?? 'unknown error',
+        );
         this.addBackendUnavailableMessage(snapshot.error);
         if (this.unsubscribeBackendUpload) {
           this.unsubscribeBackendUpload();
@@ -743,7 +838,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     this.state.bookmarks = [];
     this.state.lastQuery = '';
     this.state.currentSessionId = null;
-    this.state.agentSessionId = null;  // Reset Agent session for multi-turn dialogue
+    this.state.agentSessionId = null; // Reset Agent session for multi-turn dialogue
     this.clearAgentObservability();
     this.resetInterventionState();
 
@@ -807,7 +902,9 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
 
     // Focus input (requires DOM)
     setTimeout(() => {
-      const textarea = document.getElementById('ai-input') as HTMLTextAreaElement;
+      const textarea = document.getElementById(
+        'ai-input',
+      ) as HTMLTextAreaElement;
       if (textarea) textarea.focus();
     }, 100);
     // Animation keyframes are now defined in styles.scss
@@ -851,7 +948,8 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     }
     // Clean up dark mode listener
     if (this.darkModeListener) {
-      window.matchMedia?.('(prefers-color-scheme: dark)')
+      window
+        .matchMedia?.('(prefers-color-scheme: dark)')
         ?.removeEventListener('change', this.darkModeListener);
       this.darkModeListener = undefined;
     }
@@ -883,7 +981,9 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     }
 
     const providerLabel = this.serverStatus.connected
-      ? (this.serverStatus.runtime === 'agentv3' ? 'Claude Agent' : 'Legacy Agent')
+      ? this.serverStatus.runtime === 'agentv3'
+        ? 'Claude Agent'
+        : 'Legacy Agent'
       : 'Backend';
     const isConnected = this.serverStatus.connected;
     // Check backend availability: engine in HTTP_RPC mode, OR backend upload completed/in-progress
@@ -892,24 +992,31 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     const hasBackendTrace = !!this.state.backendTraceId;
     const backendUploadState = getBackendUploadState();
     const hasUploadInProgress = backendUploadState.state === 'uploading';
-    const isInRpcMode = engineInRpcMode || hasBackendTrace || hasUploadInProgress;
+    const isInRpcMode =
+      engineInRpcMode || hasBackendTrace || hasUploadInProgress;
 
     // 获取当前 trace 的所有 sessions（只在 RPC 模式下有意义）
     const sessions = isInRpcMode ? this.getCurrentTraceSessions() : [];
-    const currentIndex = sessions.findIndex(s => s.sessionId === this.state.currentSessionId);
+    const currentIndex = sessions.findIndex(
+      (s) => s.sessionId === this.state.currentSessionId,
+    );
 
     return m(
       'div.ai-panel',
-      { 'data-theme': this.isDarkMode ? 'dark' : 'light' },
+      {'data-theme': this.isDarkMode ? 'dark' : 'light'},
       [
         // Settings Modal
         this.state.showSettings
           ? m(SettingsModal, {
               settings: this.state.settings,
               onClose: () => this.closeSettings(),
-              onSave: (newSettings: AISettings) => this.saveSettings(newSettings),
-              onCheckStatus: (url: string, key: string) => this.checkServerStatus(url, key),
-              initialStatus: this.serverStatus.connected ? this.serverStatus : undefined,
+              onSave: (newSettings: AISettings) =>
+                this.saveSettings(newSettings),
+              onCheckStatus: (url: string, key: string) =>
+                this.checkServerStatus(url, key),
+              initialStatus: this.serverStatus.connected
+                ? this.serverStatus
+                : undefined,
             })
           : null,
 
@@ -926,19 +1033,23 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
             this.state.sseConnectionState !== 'disconnected'
               ? m('span.ai-status-dot', {
                   class: `sse-${this.state.sseConnectionState}`,
-                  title: {
-                    connecting: 'Connecting to analysis stream...',
-                    connected: 'Streaming analysis results',
-                    reconnecting: `Reconnecting (${this.state.sseRetryCount}/${this.state.sseMaxRetries})...`,
-                  }[this.state.sseConnectionState] || '',
+                  title:
+                    {
+                      connecting: 'Connecting to analysis stream...',
+                      connected: 'Streaming analysis results',
+                      reconnecting: `Reconnecting (${this.state.sseRetryCount}/${this.state.sseMaxRetries})...`,
+                    }[this.state.sseConnectionState] || '',
                 })
               : null,
             this.state.sseConnectionState !== 'disconnected'
-              ? m('span.ai-status-text', {
-                  connecting: 'Connecting...',
-                  connected: 'Streaming',
-                  reconnecting: `Retry ${this.state.sseRetryCount}/${this.state.sseMaxRetries}`,
-                }[this.state.sseConnectionState] || '')
+              ? m(
+                  'span.ai-status-text',
+                  {
+                    connecting: 'Connecting...',
+                    connected: 'Streaming',
+                    reconnecting: `Retry ${this.state.sseRetryCount}/${this.state.sseMaxRetries}`,
+                  }[this.state.sseConnectionState] || '',
+                )
               : null,
             // Backend trace status
             isInRpcMode
@@ -946,32 +1057,37 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                   title: `Trace uploaded: ${this.state.backendTraceId}`,
                 })
               : null,
-            isInRpcMode
-              ? m('span.ai-status-text.backend', 'RPC')
-              : null,
+            isInRpcMode ? m('span.ai-status-text.backend', 'RPC') : null,
             // Preset question buttons - only show when connected to backend
             isInRpcMode && !this.state.isLoading
               ? m('div.ai-preset-questions', [
-                  ...(this.state.referenceTraceId ? COMPARISON_PRESET_QUESTIONS : PRESET_QUESTIONS).map(preset =>
-                    m(`button.ai-preset-btn${preset.isTeaching ? '.ai-teaching-btn' : ''}`, {
-                      onclick: () => this.sendPresetQuestion(preset.question),
-                      title: preset.isTeaching ? '检测当前 Trace 的渲染管线类型，自动 Pin 关键泳道' : preset.question,
-                      disabled: this.state.isLoading,
-                    }, [
-                      m('i.pf-icon', preset.icon),
-                      preset.label,
-                    ])
+                  ...(this.state.referenceTraceId
+                    ? COMPARISON_PRESET_QUESTIONS
+                    : PRESET_QUESTIONS
+                  ).map((preset) =>
+                    m(
+                      `button.ai-preset-btn${preset.isTeaching ? '.ai-teaching-btn' : ''}`,
+                      {
+                        onclick: () => this.sendPresetQuestion(preset.question),
+                        title: preset.isTeaching
+                          ? '检测当前 Trace 的渲染管线类型，自动 Pin 关键泳道'
+                          : preset.question,
+                        disabled: this.state.isLoading,
+                      },
+                      [m('i.pf-icon', preset.icon), preset.label],
+                    ),
                   ),
                   // "Analyze Selection" button — only visible when user has an active selection
                   this.hasActiveSelection()
-                    ? m('button.ai-preset-btn.ai-selection-btn', {
-                        onclick: () => this.analyzeCurrentSelection(),
-                        title: this.getSelectionButtonTitle(),
-                        disabled: this.state.isLoading,
-                      }, [
-                        m('i.pf-icon', 'my_location'),
-                        '选区分析',
-                      ])
+                    ? m(
+                        'button.ai-preset-btn.ai-selection-btn',
+                        {
+                          onclick: () => this.analyzeCurrentSelection(),
+                          title: this.getSelectionButtonTitle(),
+                          disabled: this.state.isLoading,
+                        },
+                        [m('i.pf-icon', 'my_location'), '选区分析'],
+                      )
                     : null,
                 ])
               : null,
@@ -979,37 +1095,57 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
           m('div.ai-header-right', [
             // Comparison mode button — only visible when backend trace is available
             isInRpcMode && hasBackendTrace
-              ? m('button.ai-icon-btn', {
-                  onclick: () => {
-                    this.state.showTracePicker = true;
-                    this.fetchAvailableTraces();
-                    m.redraw();
+              ? m(
+                  'button.ai-icon-btn',
+                  {
+                    onclick: () => {
+                      this.state.showTracePicker = true;
+                      this.fetchAvailableTraces();
+                      m.redraw();
+                    },
+                    title: this.state.referenceTraceId
+                      ? `对比模式: ${this.state.referenceTraceName || 'Reference Trace'}`
+                      : '对比...',
+                    class: this.state.referenceTraceId ? 'active' : '',
                   },
-                  title: this.state.referenceTraceId
-                    ? `对比模式: ${this.state.referenceTraceName || 'Reference Trace'}`
-                    : '对比...',
-                  class: this.state.referenceTraceId ? 'active' : '',
-                }, m('i.pf-icon', 'compare_arrows'))
+                  m('i.pf-icon', 'compare_arrows'),
+                )
               : null,
             // Connection status indicator (read-only, no upload button in auto-RPC mode)
-            m('span.ai-icon-btn', {
-              title: isInRpcMode
-                ? 'Connected to AI backend'
-                : 'AI backend not connected',
-              style: 'cursor: default;',
-            }, m('i.pf-icon', isInRpcMode ? 'cloud_done' : 'cloud_off')),
-            m('button.ai-icon-btn', {
-              onclick: () => this.clearChat(),
-              title: 'New Chat',
-            }, m('i.pf-icon', 'add_comment')),
-            m('button.ai-icon-btn', {
-              onclick: () => this.popOutToFloatingWindow(),
-              title: '弹出为浮动窗口（可拖动、可调整大小、跨标签页保持可见）',
-            }, m('i.pf-icon', 'open_in_new')),
-            m('button.ai-icon-btn', {
-              onclick: () => this.openSettings(),
-              title: 'Settings',
-            }, m('i.pf-icon', 'settings')),
+            m(
+              'span.ai-icon-btn',
+              {
+                title: isInRpcMode
+                  ? 'Connected to AI backend'
+                  : 'AI backend not connected',
+                style: 'cursor: default;',
+              },
+              m('i.pf-icon', isInRpcMode ? 'cloud_done' : 'cloud_off'),
+            ),
+            m(
+              'button.ai-icon-btn',
+              {
+                onclick: () => this.clearChat(),
+                title: 'New Chat',
+              },
+              m('i.pf-icon', 'add_comment'),
+            ),
+            m(
+              'button.ai-icon-btn',
+              {
+                onclick: () => this.popOutToFloatingWindow(),
+                title: '弹出为浮动窗口（可拖动、可调整大小、跨标签页保持可见）',
+              },
+              m('i.pf-icon', 'open_in_new'),
+            ),
+            m(
+              'button.ai-icon-btn',
+              {
+                onclick: () => this.openSettings(),
+                title: 'Settings',
+              },
+              m('i.pf-icon', 'settings'),
+            ),
           ]),
         ]),
 
@@ -1018,681 +1154,1019 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
           ? m('div.ai-comparison-bar', [
               m('div.ai-comparison-info', [
                 m('span.ai-comparison-label', [
-                  m('i.pf-icon', {style: 'font-size: 14px; margin-right: 4px;'}, 'compare_arrows'),
+                  m(
+                    'i.pf-icon',
+                    {style: 'font-size: 14px; margin-right: 4px;'},
+                    'compare_arrows',
+                  ),
                   `对比: ${this.state.referenceTraceName || '参考 Trace'}`,
                 ]),
               ]),
               m('div.ai-comparison-actions', [
-                m('button.ai-comparison-switch', {
-                  onclick: () => this.switchComparisonTrace(),
-                  title: '在新标签页中打开参考 Trace 进行视觉验证',
-                }, '验证'),
-                m('button.ai-comparison-close', {
-                  onclick: () => this.exitComparisonMode(),
-                  title: '退出对比模式',
-                }, '\u00D7'),
+                m(
+                  'button.ai-comparison-switch',
+                  {
+                    onclick: () => this.switchComparisonTrace(),
+                    title: '在新标签页中打开参考 Trace 进行视觉验证',
+                  },
+                  '验证',
+                ),
+                m(
+                  'button.ai-comparison-close',
+                  {
+                    onclick: () => this.exitComparisonMode(),
+                    title: '退出对比模式',
+                  },
+                  '\u00D7',
+                ),
               ]),
             ])
           : null,
 
         // Trace picker modal
-        this.state.showTracePicker
-          ? this.renderTracePicker()
-          : null,
+        this.state.showTracePicker ? this.renderTracePicker() : null,
 
         // View switch toolbar — Chat ↔ Story tabs
-        m('div.ai-view-tabs', {
-          style: 'display: flex; gap: 4px; padding: 8px 16px; border-bottom: 1px solid var(--chat-border); background: var(--chat-bg-secondary);',
-        }, [
-          m('button.ai-view-tab', {
-            onclick: () => { this.state.currentView = 'chat'; m.redraw(); },
-            title: '聊天视图',
-            style: `padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;
+        m(
+          'div.ai-view-tabs',
+          {
+            style:
+              'display: flex; gap: 4px; padding: 8px 16px; border-bottom: 1px solid var(--chat-border); background: var(--chat-bg-secondary);',
+          },
+          [
+            m(
+              'button.ai-view-tab',
+              {
+                onclick: () => {
+                  this.state.currentView = 'chat';
+                  m.redraw();
+                },
+                title: '聊天视图',
+                style: `padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;
                     background: ${this.state.currentView === 'chat' ? 'var(--chat-solid-primary)' : 'transparent'};
                     color: ${this.state.currentView === 'chat' ? 'var(--chat-user-text)' : 'var(--chat-text)'};
                     font-weight: ${this.state.currentView === 'chat' ? '600' : '400'};`,
-          }, '💬 Chat'),
-          m('button.ai-view-tab', {
-            onclick: () => { this.state.currentView = 'story'; m.redraw(); },
-            title: '场景还原视图',
-            style: `padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;
+              },
+              '💬 Chat',
+            ),
+            m(
+              'button.ai-view-tab',
+              {
+                onclick: () => {
+                  this.state.currentView = 'story';
+                  m.redraw();
+                },
+                title: '场景还原视图',
+                style: `padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;
                     background: ${this.state.currentView === 'story' ? 'var(--chat-solid-primary)' : 'transparent'};
                     color: ${this.state.currentView === 'story' ? 'var(--chat-user-text)' : 'var(--chat-text)'};
                     font-weight: ${this.state.currentView === 'story' ? '600' : '400'};`,
-          }, '🎬 Story'),
-        ]),
+              },
+              '🎬 Story',
+            ),
+          ],
+        ),
 
         // Story view body — visible when currentView === 'story'
         this.state.currentView === 'story' ? this.renderStoryBody() : null,
 
         // Main content area with optional sidebar (visible when currentView === 'chat')
-        m('div.ai-content-wrapper', {
-          class: isInRpcMode ? 'with-sidebar' : '',  // 总是显示侧边栏（RPC 模式下）
-          style: this.state.currentView === 'story' ? 'display: none;' : '',
-        }, [
-          // Left: Main content area
-          m('div.ai-main-content', [
-            // Scene Navigation Bar (场景导航 - 自动检测 Trace 中的操作场景)
-            isInRpcMode && this.trace
-              ? m(SceneNavigationBar, {
-                  scenes: this.state.detectedScenes,
-                  trace: this.trace,
-                  isLoading: this.state.scenesLoading,
-                  onSceneClick: (scene, index) => {
-                    if (DEBUG_AI_PANEL) console.log(`[AIPanel] Jumped to scene ${index}: ${scene.type}`);
-                    this.analyzeScene(scene);
-                  },
-                  onRefresh: () => this.detectScenesQuick(),
-                })
-              : null,
-
-            // Navigation Bookmark Bar (显示AI识别的关键时间点)
-            this.state.bookmarks.length > 0 && this.trace
-              ? m(NavigationBookmarkBar, {
-                  bookmarks: this.state.bookmarks,
-                  trace: this.trace,
-                  onBookmarkClick: (bookmark, index) => {
-                    if (DEBUG_AI_PANEL) console.log(`Jumped to bookmark ${index}: ${bookmark.label}`);
-                  },
-                })
-              : null,
-
-            // Backend Unavailable Dialog - full overlay only when no existing messages
-            // When messages exist, an inline banner is shown inside the messages area instead
-            (!isInRpcMode && this.state.messages.length === 0)
-              ? m('div.ai-rpc-dialog', [
-                  this.state.isRetryingBackend
-                    ? m('div.ai-rpc-dialog-icon.uploading', m('i.pf-icon', 'cloud_upload'))
-                    : m('div.ai-rpc-dialog-icon', m('i.pf-icon', 'cloud_off')),
-                  m('h3.ai-rpc-dialog-title',
-                    this.state.isRetryingBackend ? '正在连接后端...' : 'AI 后端未连接'
-                  ),
-                  m('p.ai-rpc-dialog-desc', [
-                    'Trace 已加载到 WASM 引擎，但无法连接到 AI 后端。',
-                    m('br'),
-                    'AI 分析功能需要后端服务支持。',
-                  ]),
-                  this.state.retryError
-                    ? m('p.ai-rpc-dialog-desc', {style: 'color: var(--chat-error);'}, [
-                        m('i.pf-icon', 'error'),
-                        ' ' + this.state.retryError,
-                      ])
-                    : null,
-                  m('p.ai-rpc-dialog-hint', [
-                    '请确保后端服务正在运行：',
-                    m('br'),
-                    m('code', 'cd backend && npm run dev'),
-                    m('br'),
-                    m('br'),
-                    '然后点击下方按钮重试连接。',
-                  ]),
-                  this.state.isRetryingBackend
-                    ? m('div.ai-upload-progress')
-                    : m('div.ai-rpc-dialog-actions', [
-                        m('button.ai-rpc-dialog-btn.primary', {
-                          onclick: () => this.retryBackendConnection(),
-                        }, [
-                          m('i.pf-icon', 'refresh'),
-                          '重试连接',
-                        ]),
-                      ]),
-                ])
-              : null,
-
-            // Messages with auto-scroll - show when connected OR when messages exist
-            (isInRpcMode || this.state.messages.length > 0) ? m('div.ai-messages', {
-          role: 'log',
-          'aria-live': 'polite',
-          oncreate: (vnode) => {
-            this.messagesContainer = vnode.dom as HTMLElement;
-            this.scrollToBottom(true);
+        m(
+          'div.ai-content-wrapper',
+          {
+            class: isInRpcMode ? 'with-sidebar' : '', // 总是显示侧边栏（RPC 模式下）
+            style: this.state.currentView === 'story' ? 'display: none;' : '',
           },
-          onupdate: () => {
-            if (this.state.messages.length !== this.lastMessageCount) {
-              this.lastMessageCount = this.state.messages.length;
-              this.scrollToBottom();
-            } else if (this.state.isLoading) {
-              // During streaming, content updates within existing messages
-              // (answer_token appending) don't change message count.
-              // Throttle to avoid forced reflow on every m.redraw().
-              this.throttledScrollToBottom();
-            }
-          },
-        },
-          (() => {
-            let reportLinkSequence = 0;
-            const hasConversationTimeline = this.state.messages.some(
-              (msg) => msg.flowTag === 'streaming_flow'
-            );
-            const filteredMessages = this.state.messages
-              .filter((msg) => {
-                // Hide progress_note bubbles when conversation timeline is active
-                // (same info is already shown in the timeline)
-                if (hasConversationTimeline && msg.flowTag === 'progress_note') return false;
-                return true;
-              });
-            // Assign each message a round index based on round_separator boundaries.
-            // Within each round, streaming_flow sorts before answer_stream, but
-            // this reordering never crosses round boundaries.
-            const roundIndexMap = new Map<string, number>();
-            let currentRound = 0;
-            for (const msg of filteredMessages) {
-              if (msg.flowTag === 'round_separator') currentRound++;
-              roundIndexMap.set(msg.id, currentRound);
-            }
-            const sortedMessages = [...filteredMessages]
-              .sort((a, b) => {
-                const roundA = roundIndexMap.get(a.id) ?? 0;
-                const roundB = roundIndexMap.get(b.id) ?? 0;
-                if (roundA !== roundB) return roundA - roundB;
-                const order = (msg: {flowTag?: string}) => {
-                  if (msg.flowTag === 'streaming_flow') return 1;
-                  if (msg.flowTag === 'answer_stream') return 2;
-                  return 0;
-                };
-                return order(a) - order(b);
-              });
-            // Build a map of msg.id → previous user message's model for change-badge
-            const prevUserModelMap = new Map<string, string | undefined>();
-            let lastUserModel: string | undefined;
-            for (const msg of sortedMessages) {
-              if (msg.role === 'user') {
-                prevUserModelMap.set(msg.id, lastUserModel);
-                lastUserModel = msg.model;
-              }
-            }
-
-            return sortedMessages.map((msg) => {
-              // Round separator — visual divider between conversation rounds
-              if (msg.flowTag === 'round_separator') {
-                return m('div.ai-round-separator', {key: msg.id}, [
-                  m('div.ai-round-separator-line'),
-                  m('span.ai-round-separator-label', msg.content),
-                  m('div.ai-round-separator-line'),
-                ]);
-              }
-
-              const reportLinkLabel = msg.reportUrl
-                ? `查看详细分析报告 #${++reportLinkSequence} (${new Date(msg.timestamp).toLocaleTimeString('zh-CN', {hour12: false})})`
-                : '';
-              const isProgressMessage = msg.flowTag === 'streaming_flow' || msg.flowTag === 'progress_note';
-              const messageClass = [
-                msg.role === 'user' ? 'ai-message-user' : 'ai-message-assistant',
-                msg.flowTag ? `ai-message-${msg.flowTag}` : '',
-                isProgressMessage ? 'ai-message-progress' : '',
-              ].filter(Boolean).join(' ');
-              const bubbleClass = [
-                msg.role === 'user' ? 'ai-bubble-user' : 'ai-bubble-assistant',
-                isProgressMessage ? 'ai-bubble-progress' : '',
-              ].filter(Boolean).join(' ');
-              const contentClass = isProgressMessage ? 'ai-message-content-progress' : '';
-
-              return m('div.ai-message', {
-              key: msg.id,
-              class: messageClass,
-            }, [
-              // Avatar
-              m('div.ai-avatar', {
-                class: msg.role === 'user' ? 'ai-avatar-user' : 'ai-avatar-assistant',
-              }, msg.role === 'user'
-                ? 'U'  // User initial
-                : m('i.pf-icon', 'auto_awesome')),
-
-              // Message Content (wrapper so badge sits below bubble)
-              m('div.ai-bubble-wrapper', {}, [
-              m('div.ai-bubble', {
-                class: bubbleClass,
-              }, [
-                // Use oncreate/onupdate to directly set innerHTML, bypassing Mithril's
-                // reconciliation for m.trust() content. This avoids removeChild errors
-                // that occur when multiple SSE events trigger rapid redraws.
-                m('div.ai-message-content', {
-                  class: contentClass,
-                  onclick: (e: MouseEvent) => {
-                    const selection = window.getSelection();
-                    if (selection && !selection.isCollapsed) {
-                      // Don't trigger click actions while user is selecting text to copy.
-                      return;
-                    }
-                    const target = e.target as HTMLElement;
-                    const copyBtn = target.closest?.('.ai-mermaid-copy') as HTMLElement | null;
-                    if (copyBtn) {
-                      const b64 = copyBtn.getAttribute('data-mermaid-b64');
-                      if (b64) {
-                        try {
-                          const code = decodeBase64Unicode(b64);
-                          void this.copyTextToClipboard(code);
-                        } catch (err) {
-                          console.warn('[AIPanel] Failed to copy mermaid code:', err);
-                        }
-                      }
-                      return;
-                    }
-                    if (target.classList.contains('ai-clickable-timestamp')) {
-                      const tsNs = target.getAttribute('data-ts');
-                      if (tsNs) {
-                        const timestampNs = BigInt(tsNs);
-                        const navigation = this.jumpToTimestamp(timestampNs);
-                        if (!navigation.ok) {
-                          this.addMessage({
-                            id: this.generateId(),
-                            role: 'assistant',
-                            content: `Failed to navigate to timestamp ${timestampNs.toString()}ns: ${navigation.error}`,
-                            timestamp: Date.now(),
-                          });
-                        }
-                      }
-                    }
-                  },
-                  oncreate: (vnode: m.VnodeDOM) => {
-                    const dom = vnode.dom as HTMLElement;
-                    dom.innerHTML = formatMessage(msg.content);
-                    void this.renderMermaidInElement(dom);
-                    if (msg.role === 'assistant' && !isProgressMessage) {
-                      this.applyBlockReveal(dom, msg.id);
-                    }
-                  },
-                  onupdate: (vnode: m.VnodeDOM) => {
-                    const newHtml = formatMessage(msg.content);
-                    const dom = vnode.dom as HTMLElement;
-                    // Only update if content actually changed (optimization)
-                    if (dom.innerHTML !== newHtml) {
-                      dom.innerHTML = newHtml;
-                      void this.renderMermaidInElement(dom);
-                      if (msg.role === 'assistant' && !isProgressMessage) {
-                        this.applyBlockReveal(dom, msg.id);
-                      }
-                    }
-                  },
-                }),
-
-                // HTML Report Link (问题1修复)
-                msg.reportUrl ? m('div.ai-report-link', [
-                  m('i.pf-icon', 'description'),
-                  m('a', {
-                    href: msg.reportUrl,
-                    target: '_blank',
-                    rel: 'noopener noreferrer',
-                  }, reportLinkLabel),
-                ]) : null,
-
-                // SQL Result
-                (() => {
-                  const sqlResult = msg.sqlResult;
-                  if (!sqlResult) return null;
-                  const query = sqlResult.query || msg.query || '';
-
-                  // For skill_section messages with sectionTitle, render compact table only
-                  if (sqlResult.sectionTitle) {
-                    // Auto-collapse tables marked as defaultCollapsed on first render
-                    if (sqlResult.defaultCollapsed && !this.state.collapsedTables.has(msg.id) &&
-                        !this.state.collapsedTables.has(`_init_${msg.id}`)) {
-                      this.state.collapsedTables.add(msg.id);
-                      this.state.collapsedTables.add(`_init_${msg.id}`);  // Mark as initialized
-                    }
-
-                    const isCollapsed = sqlResult.collapsible && this.state.collapsedTables.has(msg.id);
-
-                    if (isCollapsed) {
-                      // Render collapsed: just a clickable title bar
-                      return m('div.ai-collapsed-table', {
-                        style: {
-                          padding: '8px 12px',
-                          background: 'var(--chat-bg-secondary)',
-                          border: '1px solid var(--chat-border)',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          opacity: '0.7',
-                        },
-                        onclick: () => {
-                          this.state.collapsedTables.delete(msg.id);
-                          m.redraw();
-                        },
-                      }, [
-                        m('i.pf-icon', {style: {fontSize: '14px'}}, 'chevron_right'),
-                        m('span', {style: {fontSize: '13px', fontWeight: '500'}},
-                          `${sqlResult.sectionTitle} (${sqlResult.rowCount} 条)`),
-                      ]);
-                    }
-
-                    // Render expanded table with optional collapse toggle
-                    return m('div', [
-                      sqlResult.collapsible ? m('div.ai-table-collapse-toggle', {
-                        style: {
-                          padding: '4px 8px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          fontSize: '12px',
-                          color: 'var(--chat-text-secondary)',
-                        },
-                        onclick: () => {
-                          this.state.collapsedTables.add(msg.id);
-                          m.redraw();
-                        },
-                      }, [
-                        m('i.pf-icon', {style: {fontSize: '12px'}}, 'expand_less'),
-                        m('span', '收起'),
-                      ]) : null,
-                      m(SqlResultTable, {
-                        columns: sqlResult.columns,
-                        rows: sqlResult.maxVisibleRows
-                          ? sqlResult.rows.slice(0, sqlResult.maxVisibleRows)
-                          : sqlResult.rows,
-                        rowCount: sqlResult.maxVisibleRows
-                          ? Math.min(sqlResult.rowCount, sqlResult.maxVisibleRows)
-                          : sqlResult.rowCount,
-                        query: '',  // No SQL display
-                        title: sqlResult.sectionTitle,  // Pass title to table
-                        trace: vnode.attrs.trace,
-                        onPin: (data) => this.handlePin(data),
-                        onInteraction: (interaction) => this.handleInteraction(interaction),  // v2.0 Focus Tracking
-                        expandableData: sqlResult.expandableData,
-                        summary: sqlResult.summary,
-                        metadata: sqlResult.metadata,  // Pass metadata for header display
-                      }),
-                    ]);
-                  }
-
-                  // Regular SQL result with outer header
-                  return m('div.ai-sql-card', [
-                    m('div.ai-sql-header', [
-                      m('div.ai-sql-title', [
-                        m('i.pf-icon', 'table_chart'),
-                        m('span', `${sqlResult.rowCount.toLocaleString()} rows`),
-                      ]),
-                      m('div.ai-sql-actions', [
-                        m('button.ai-sql-action-btn', {
-                          onclick: () => this.copyToClipboard(query),
-                          title: 'Copy SQL',
-                        }, [
-                          m('i.pf-icon', 'content_copy'),
-                          m('span', 'Copy'),
-                        ]),
-                        query
-                          ? m('button.ai-sql-action-btn', {
-                              onclick: () => this.handlePin({
-                                query,
-                                columns: sqlResult.columns,
-                                rows: sqlResult.rows.slice(0, 100),
-                                timestamp: Date.now(),
-                              }),
-                              title: 'Pin result',
-                            }, [
-                              m('i.pf-icon', 'push_pin'),
-                              m('span', 'Pin'),
-                            ])
-                          : null,
-                      ]),
-                    ]),
-                    query
-                      ? m('div.ai-sql-query', query.trim())
-                      : null,
-                    m(SqlResultTable, {
-                      columns: sqlResult.columns,
-                      rows: sqlResult.rows,
-                      rowCount: sqlResult.rowCount,
-                      query,
-                      trace: vnode.attrs.trace,  // 传入 trace 对象以支持时间戳跳转
-                      onPin: (data) => this.handlePin(data),
-                      onExport: (format) => this.exportResult(sqlResult, format),
-                      onInteraction: (interaction) => this.handleInteraction(interaction),  // v2.0 Focus Tracking
-                      expandableData: sqlResult.expandableData,
-                      summary: sqlResult.summary,
-                      metadata: sqlResult.metadata,  // Pass metadata for header display
-                    }),
-                  ]);
-                })(),
-
-                // Chart Data Visualization
-                msg.chartData ? m('div.ai-chart-card', {
-                  style: {
-                    marginTop: '12px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--chat-border)',
-                    overflow: 'hidden',
-                  },
-                }, [
-                  m(ChartVisualizer, {
-                    chartData: msg.chartData,
-                    width: 400,
-                    height: 280,
-                  }),
-                ]) : null,
-
-                // Metric Card Visualization
-                msg.metricData ? m('div.ai-metric-card', {
-                  style: {
-                    marginTop: '12px',
-                    padding: '16px 20px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--chat-border)',
-                    background: 'var(--chat-bg)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '16px',
-                  },
-                }, (() => {
-                  const metricStyle = metricStatusStyle(msg.metricData.status);
-                  return [
-                  m('div', {
-                    style: {
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '50%',
-                      background: metricStyle.bg,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+          [
+            // Left: Main content area
+            m('div.ai-main-content', [
+              // Scene Navigation Bar (场景导航 - 自动检测 Trace 中的操作场景)
+              isInRpcMode && this.trace
+                ? m(SceneNavigationBar, {
+                    scenes: this.state.detectedScenes,
+                    trace: this.trace,
+                    isLoading: this.state.scenesLoading,
+                    onSceneClick: (scene, index) => {
+                      if (DEBUG_AI_PANEL)
+                        console.log(
+                          `[AIPanel] Jumped to scene ${index}: ${scene.type}`,
+                        );
+                      this.analyzeScene(scene);
                     },
-                  }, [
-                    m('i.pf-icon', {
-                      style: {
-                        fontSize: '24px',
-                        color: metricStyle.fg,
-                      },
-                    }, metricStyle.icon),
-                  ]),
-                  m('div', { style: { flex: 1 } }, [
-                    m('div', {
-                      style: {
-                        fontSize: '12px',
-                        color: 'var(--chat-text-secondary)',
-                        marginBottom: '4px',
-                      },
-                    }, msg.metricData.title),
-                    m('div', {
-                      style: {
-                        fontSize: '28px',
-                        fontWeight: '600',
-                        color: 'var(--chat-text)',
-                        lineHeight: '1.2',
-                      },
-                    }, [
-                      String(msg.metricData.value),
-                      msg.metricData.unit ? m('span', {
-                        style: {
-                          fontSize: '14px',
-                          fontWeight: '400',
-                          color: 'var(--chat-text-secondary)',
-                          marginLeft: '4px',
-                        },
-                      }, msg.metricData.unit) : null,
+                    onRefresh: () => this.detectScenesQuick(),
+                  })
+                : null,
+
+              // Navigation Bookmark Bar (显示AI识别的关键时间点)
+              this.state.bookmarks.length > 0 && this.trace
+                ? m(NavigationBookmarkBar, {
+                    bookmarks: this.state.bookmarks,
+                    trace: this.trace,
+                    onBookmarkClick: (bookmark, index) => {
+                      if (DEBUG_AI_PANEL)
+                        console.log(
+                          `Jumped to bookmark ${index}: ${bookmark.label}`,
+                        );
+                    },
+                  })
+                : null,
+
+              // Backend Unavailable Dialog - full overlay only when no existing messages
+              // When messages exist, an inline banner is shown inside the messages area instead
+              !isInRpcMode && this.state.messages.length === 0
+                ? m('div.ai-rpc-dialog', [
+                    this.state.isRetryingBackend
+                      ? m(
+                          'div.ai-rpc-dialog-icon.uploading',
+                          m('i.pf-icon', 'cloud_upload'),
+                        )
+                      : m(
+                          'div.ai-rpc-dialog-icon',
+                          m('i.pf-icon', 'cloud_off'),
+                        ),
+                    m(
+                      'h3.ai-rpc-dialog-title',
+                      this.state.isRetryingBackend
+                        ? '正在连接后端...'
+                        : 'AI 后端未连接',
+                    ),
+                    m('p.ai-rpc-dialog-desc', [
+                      'Trace 已加载到 WASM 引擎，但无法连接到 AI 后端。',
+                      m('br'),
+                      'AI 分析功能需要后端服务支持。',
                     ]),
-                    msg.metricData.delta ? m('div', {
-                      style: {
-                        fontSize: '12px',
-                        color: msg.metricData.delta.startsWith('+') ? 'var(--chat-success)' :
-                               msg.metricData.delta.startsWith('-') ? 'var(--chat-error)' : 'var(--chat-text-secondary)',
-                        marginTop: '4px',
-                      },
-                    }, msg.metricData.delta) : null,
-                  ]),
-                  ];
-                })()) : null,
-              ]),
-
-              // Model-change badge — below bubble, inside wrapper so it stacks vertically
-              (msg.role === 'user' && msg.model && msg.model !== prevUserModelMap.get(msg.id))
-                ? m('div.ai-model-badge', {
-                    title: `Switched to: ${msg.model}`,
-                  }, [
-                    m('i.pf-icon', {style: {fontSize: '11px', verticalAlign: 'middle'}}, 'swap_horiz'),
-                    m('span', ` ${msg.model}`),
-                  ])
-                : null,
-              ]), // end ai-bubble-wrapper
-
-              // Feedback buttons — show on non-progress assistant messages
-              (msg.role === 'assistant' && !isProgressMessage && msg.content.length > 50)
-                ? m('div.ai-feedback-bar', [
-                    m('button.ai-feedback-btn', {
-                      class: (this.state as any)[`feedback_${msg.id}`] === 'positive' ? 'active' : '',
-                      title: '有用',
-                      onclick: () => {
-                        (this.state as any)[`feedback_${msg.id}`] = 'positive';
-                        this.submitFeedback(msg.id, 'positive');
-                      },
-                    }, m('i.pf-icon', 'thumb_up')),
-                    m('button.ai-feedback-btn', {
-                      class: (this.state as any)[`feedback_${msg.id}`] === 'negative' ? 'active' : '',
-                      title: '不准确',
-                      onclick: () => {
-                        (this.state as any)[`feedback_${msg.id}`] = 'negative';
-                        this.submitFeedback(msg.id, 'negative');
-                      },
-                    }, m('i.pf-icon', 'thumb_down')),
-                  ])
-                : null,
-            ]);
-            });
-          })(),
-
-          // Intervention Panel (Agent-Driven Architecture v2.0)
-          this.state.interventionState.isActive && this.state.interventionState.intervention
-              ? m(InterventionPanel, {
-                  state: this.state.interventionState,
-                  sessionId: this.state.agentSessionId,
-                  backendUrl: this.state.settings.backendUrl,
-                  backendApiKey: this.state.settings.backendApiKey,
-                  onStateChange: (newState: Partial<InterventionState>) => {
-                  this.state.interventionState = {
-                    ...this.state.interventionState,
-                    ...newState,
-                  };
-                  m.redraw();
-                },
-                onComplete: () => {
-                  m.redraw();
-                },
-              })
-            : null,
-
-          // Loading Indicator with phase context
-          this.state.isLoading
-            ? m('div.ai-message.ai-message-assistant', [
-                m('div.ai-avatar.ai-avatar-assistant', [
-                  m('i.pf-icon', 'auto_awesome'),
-                ]),
-                m('div.ai-bubble.ai-bubble-assistant', [
-                  m('div.ai-typing-indicator', [
-                    m('span.ai-typing-dot'),
-                    m('span.ai-typing-dot'),
-                    m('span.ai-typing-dot'),
-                    this.state.loadingPhase
-                      ? m('span.ai-typing-phase', this.state.loadingPhase)
+                    this.state.retryError
+                      ? m(
+                          'p.ai-rpc-dialog-desc',
+                          {style: 'color: var(--chat-error);'},
+                          [
+                            m('i.pf-icon', 'error'),
+                            ' ' + this.state.retryError,
+                          ],
+                        )
                       : null,
-                  ]),
-                ]),
-              ])
-            : null,
-
-          // Backend connecting indicator — animated progress during background upload
-          (hasUploadInProgress && !hasBackendTrace && !this.state.isLoading)
-            ? m('div.ai-connecting-indicator', [
-                m('i.pf-icon', 'cloud_upload'),
-                m('span', '正在连接 AI 后端...'),
-                m('div.ai-upload-progress'),
-              ])
-            : null,
-
-          // Inline disconnection banner — shown when backend drops mid-conversation
-          (!isInRpcMode && this.state.messages.length > 0)
-            ? m('div.ai-disconnect-banner', [
-                m('i.pf-icon', 'cloud_off'),
-                m('span', 'AI 后端连接已断开'),
-                this.state.isRetryingBackend
-                  ? m('span.ai-disconnect-retrying', '重试中...')
-                  : m('button.ai-disconnect-retry-btn', {
-                      onclick: () => this.retryBackendConnection(),
-                    }, '重试连接'),
-              ])
-            : null,
-        ) : null,
-
-        // Input Area - always show (disabled when disconnected)
-            (isInRpcMode || this.state.messages.length > 0) ? m('div.ai-input-area', [
-              // Conversation context indicator
-              this.state.messages.length > 0 && this.state.agentSessionId
-                ? m('div.ai-context-indicator',
-                  `第 ${this.state.messages.filter(msg => msg.role === 'user').length} 轮对话 | 会话 ${this.state.agentSessionId.substring(0, 8)}...`)
-                : null,
-              this.renderSliceCard(),
-              this.renderAreaCard(),
-              this.renderAnalysisModeChips(),
-              m('div.ai-input-wrapper', [
-                m('textarea#ai-input.ai-input', {
-                  class: this.state.isLoading || !this.state.aiService || !isInRpcMode ? 'disabled' : '',
-                  'aria-label': '\u8F93\u5165\u5206\u6790\u95EE\u9898',
-                  placeholder: !isInRpcMode ? 'AI 后端未连接...' : 'Ask anything about your trace...',
-                  value: this.state.input,
-                  oninput: (e: Event) => {
-                    this.state.input = (e.target as HTMLTextAreaElement).value;
-                    this.state.historyIndex = -1;
-                  },
-                  onkeydown: (e: KeyboardEvent) => this.handleKeyDown(e),
-                  disabled: this.state.isLoading || !this.state.aiService || !isInRpcMode,
-                }),
-                m(ProviderQuickSwitcher, {
-                  backendUrl: this.state.settings.backendUrl,
-                  apiKey: this.state.settings.backendApiKey || undefined,
-                  compact: true,
-                  onActivate: () => this.refreshServerStatus(),
-                }),
-                m('div.ai-input-divider'),
-                this.state.isLoading
-                  ? m('button.ai-send-btn.ai-stop-btn', {
-                      onclick: () => this.cancelAnalysis(),
-                      title: 'Stop analysis',
-                    }, m('i.pf-icon', 'stop_circle'))
-                  : m('button.ai-send-btn', {
-                      class: !this.state.aiService || !isInRpcMode ? 'disabled' : '',
-                      onclick: () => this.sendMessage(),
-                      disabled: !this.state.aiService || !isInRpcMode,
-                      title: 'Send (Enter)',
-                      'aria-label': '\u53D1\u9001',
-                    }, m('i.pf-icon', 'send')),
-              ]),
-              m('div.ai-input-hint', 'Press Enter to send, Shift+Enter for new line'),
-              !this.state.aiService
-                ? m('div.ai-warning', [
-                    m('i.pf-icon', 'warning'),
-                    m('span', 'AI service not configured. Click settings to set up.'),
+                    m('p.ai-rpc-dialog-hint', [
+                      '请确保后端服务正在运行：',
+                      m('br'),
+                      m('code', 'cd backend && npm run dev'),
+                      m('br'),
+                      m('br'),
+                      '然后点击下方按钮重试连接。',
+                    ]),
+                    this.state.isRetryingBackend
+                      ? m('div.ai-upload-progress')
+                      : m('div.ai-rpc-dialog-actions', [
+                          m(
+                            'button.ai-rpc-dialog-btn.primary',
+                            {
+                              onclick: () => this.retryBackendConnection(),
+                            },
+                            [m('i.pf-icon', 'refresh'), '重试连接'],
+                          ),
+                        ]),
                   ])
                 : null,
-            ]) : null,
-          ]),  // End of ai-main-content
 
-          // Right: Session History Sidebar (总是显示，RPC 模式下)
-          isInRpcMode
-            ? this.renderSessionSidebar(sessions, currentIndex)
-            : null,
-        ]),  // End of ai-content-wrapper
-      ]
+              // Messages with auto-scroll - show when connected OR when messages exist
+              isInRpcMode || this.state.messages.length > 0
+                ? m(
+                    'div.ai-messages',
+                    {
+                      'role': 'log',
+                      'aria-live': 'polite',
+                      'oncreate': (vnode) => {
+                        this.messagesContainer = vnode.dom as HTMLElement;
+                        this.scrollToBottom(true);
+                      },
+                      'onupdate': () => {
+                        if (
+                          this.state.messages.length !== this.lastMessageCount
+                        ) {
+                          this.lastMessageCount = this.state.messages.length;
+                          this.scrollToBottom();
+                        } else if (this.state.isLoading) {
+                          // During streaming, content updates within existing messages
+                          // (answer_token appending) don't change message count.
+                          // Throttle to avoid forced reflow on every m.redraw().
+                          this.throttledScrollToBottom();
+                        }
+                      },
+                    },
+                    (() => {
+                      let reportLinkSequence = 0;
+                      const hasConversationTimeline = this.state.messages.some(
+                        (msg) => msg.flowTag === 'streaming_flow',
+                      );
+                      const filteredMessages = this.state.messages.filter(
+                        (msg) => {
+                          // Hide progress_note bubbles when conversation timeline is active
+                          // (same info is already shown in the timeline)
+                          if (
+                            hasConversationTimeline &&
+                            msg.flowTag === 'progress_note'
+                          )
+                            return false;
+                          return true;
+                        },
+                      );
+                      // Assign each message a round index based on round_separator boundaries.
+                      // Within each round, streaming_flow sorts before answer_stream, but
+                      // this reordering never crosses round boundaries.
+                      const roundIndexMap = new Map<string, number>();
+                      let currentRound = 0;
+                      for (const msg of filteredMessages) {
+                        if (msg.flowTag === 'round_separator') currentRound++;
+                        roundIndexMap.set(msg.id, currentRound);
+                      }
+                      const sortedMessages = [...filteredMessages].sort(
+                        (a, b) => {
+                          const roundA = roundIndexMap.get(a.id) ?? 0;
+                          const roundB = roundIndexMap.get(b.id) ?? 0;
+                          if (roundA !== roundB) return roundA - roundB;
+                          const order = (msg: {flowTag?: string}) => {
+                            if (msg.flowTag === 'streaming_flow') return 1;
+                            if (msg.flowTag === 'answer_stream') return 2;
+                            return 0;
+                          };
+                          return order(a) - order(b);
+                        },
+                      );
+                      // Build a map of msg.id → previous user message's model for change-badge
+                      const prevUserModelMap = new Map<
+                        string,
+                        string | undefined
+                      >();
+                      let lastUserModel: string | undefined;
+                      for (const msg of sortedMessages) {
+                        if (msg.role === 'user') {
+                          prevUserModelMap.set(msg.id, lastUserModel);
+                          lastUserModel = msg.model;
+                        }
+                      }
+
+                      return sortedMessages.map((msg) => {
+                        // Round separator — visual divider between conversation rounds
+                        if (msg.flowTag === 'round_separator') {
+                          return m('div.ai-round-separator', {key: msg.id}, [
+                            m('div.ai-round-separator-line'),
+                            m('span.ai-round-separator-label', msg.content),
+                            m('div.ai-round-separator-line'),
+                          ]);
+                        }
+
+                        const reportLinkLabel = msg.reportUrl
+                          ? `查看详细分析报告 #${++reportLinkSequence} (${new Date(msg.timestamp).toLocaleTimeString('zh-CN', {hour12: false})})`
+                          : '';
+                        const isProgressMessage =
+                          msg.flowTag === 'streaming_flow' ||
+                          msg.flowTag === 'progress_note';
+                        const messageClass = [
+                          msg.role === 'user'
+                            ? 'ai-message-user'
+                            : 'ai-message-assistant',
+                          msg.flowTag ? `ai-message-${msg.flowTag}` : '',
+                          isProgressMessage ? 'ai-message-progress' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ');
+                        const bubbleClass = [
+                          msg.role === 'user'
+                            ? 'ai-bubble-user'
+                            : 'ai-bubble-assistant',
+                          isProgressMessage ? 'ai-bubble-progress' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ');
+                        const contentClass = isProgressMessage
+                          ? 'ai-message-content-progress'
+                          : '';
+
+                        return m(
+                          'div.ai-message',
+                          {
+                            key: msg.id,
+                            class: messageClass,
+                          },
+                          [
+                            // Avatar
+                            m(
+                              'div.ai-avatar',
+                              {
+                                class:
+                                  msg.role === 'user'
+                                    ? 'ai-avatar-user'
+                                    : 'ai-avatar-assistant',
+                              },
+                              msg.role === 'user'
+                                ? 'U' // User initial
+                                : m('i.pf-icon', 'auto_awesome'),
+                            ),
+
+                            // Message Content (wrapper so badge sits below bubble)
+                            m('div.ai-bubble-wrapper', {}, [
+                              m(
+                                'div.ai-bubble',
+                                {
+                                  class: bubbleClass,
+                                },
+                                [
+                                  // Use oncreate/onupdate to directly set innerHTML, bypassing Mithril's
+                                  // reconciliation for m.trust() content. This avoids removeChild errors
+                                  // that occur when multiple SSE events trigger rapid redraws.
+                                  m('div.ai-message-content', {
+                                    class: contentClass,
+                                    onclick: (e: MouseEvent) => {
+                                      const selection = window.getSelection();
+                                      if (selection && !selection.isCollapsed) {
+                                        // Don't trigger click actions while user is selecting text to copy.
+                                        return;
+                                      }
+                                      const target = e.target as HTMLElement;
+                                      const copyBtn = target.closest?.(
+                                        '.ai-mermaid-copy',
+                                      ) as HTMLElement | null;
+                                      if (copyBtn) {
+                                        const b64 =
+                                          copyBtn.getAttribute(
+                                            'data-mermaid-b64',
+                                          );
+                                        if (b64) {
+                                          try {
+                                            const code =
+                                              decodeBase64Unicode(b64);
+                                            void this.copyTextToClipboard(code);
+                                          } catch (err) {
+                                            console.warn(
+                                              '[AIPanel] Failed to copy mermaid code:',
+                                              err,
+                                            );
+                                          }
+                                        }
+                                        return;
+                                      }
+                                      if (
+                                        target.classList.contains(
+                                          'ai-clickable-timestamp',
+                                        )
+                                      ) {
+                                        const tsNs =
+                                          target.getAttribute('data-ts');
+                                        if (tsNs) {
+                                          const timestampNs = BigInt(tsNs);
+                                          const navigation =
+                                            this.jumpToTimestamp(timestampNs);
+                                          if (!navigation.ok) {
+                                            this.addMessage({
+                                              id: this.generateId(),
+                                              role: 'assistant',
+                                              content: `Failed to navigate to timestamp ${timestampNs.toString()}ns: ${navigation.error}`,
+                                              timestamp: Date.now(),
+                                            });
+                                          }
+                                        }
+                                      }
+                                    },
+                                    oncreate: (vnode: m.VnodeDOM) => {
+                                      const dom = vnode.dom as HTMLElement;
+                                      dom.innerHTML = formatMessage(
+                                        msg.content,
+                                      );
+                                      void this.renderMermaidInElement(dom);
+                                      if (
+                                        msg.role === 'assistant' &&
+                                        !isProgressMessage
+                                      ) {
+                                        this.applyBlockReveal(dom, msg.id);
+                                      }
+                                    },
+                                    onupdate: (vnode: m.VnodeDOM) => {
+                                      const newHtml = formatMessage(
+                                        msg.content,
+                                      );
+                                      const dom = vnode.dom as HTMLElement;
+                                      // Only update if content actually changed (optimization)
+                                      if (dom.innerHTML !== newHtml) {
+                                        dom.innerHTML = newHtml;
+                                        void this.renderMermaidInElement(dom);
+                                        if (
+                                          msg.role === 'assistant' &&
+                                          !isProgressMessage
+                                        ) {
+                                          this.applyBlockReveal(dom, msg.id);
+                                        }
+                                      }
+                                    },
+                                  }),
+
+                                  // HTML Report Link (问题1修复)
+                                  msg.reportUrl
+                                    ? m('div.ai-report-link', [
+                                        m('i.pf-icon', 'description'),
+                                        m(
+                                          'a',
+                                          {
+                                            href: msg.reportUrl,
+                                            target: '_blank',
+                                            rel: 'noopener noreferrer',
+                                          },
+                                          reportLinkLabel,
+                                        ),
+                                      ])
+                                    : null,
+
+                                  // SQL Result
+                                  (() => {
+                                    const sqlResult = msg.sqlResult;
+                                    if (!sqlResult) return null;
+                                    const query =
+                                      sqlResult.query || msg.query || '';
+
+                                    // For skill_section messages with sectionTitle, render compact table only
+                                    if (sqlResult.sectionTitle) {
+                                      // Auto-collapse tables marked as defaultCollapsed on first render
+                                      if (
+                                        sqlResult.defaultCollapsed &&
+                                        !this.state.collapsedTables.has(
+                                          msg.id,
+                                        ) &&
+                                        !this.state.collapsedTables.has(
+                                          `_init_${msg.id}`,
+                                        )
+                                      ) {
+                                        this.state.collapsedTables.add(msg.id);
+                                        this.state.collapsedTables.add(
+                                          `_init_${msg.id}`,
+                                        ); // Mark as initialized
+                                      }
+
+                                      const isCollapsed =
+                                        sqlResult.collapsible &&
+                                        this.state.collapsedTables.has(msg.id);
+
+                                      if (isCollapsed) {
+                                        // Render collapsed: just a clickable title bar
+                                        return m(
+                                          'div.ai-collapsed-table',
+                                          {
+                                            style: {
+                                              padding: '8px 12px',
+                                              background:
+                                                'var(--chat-bg-secondary)',
+                                              border:
+                                                '1px solid var(--chat-border)',
+                                              borderRadius: '6px',
+                                              cursor: 'pointer',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '8px',
+                                              opacity: '0.7',
+                                            },
+                                            onclick: () => {
+                                              this.state.collapsedTables.delete(
+                                                msg.id,
+                                              );
+                                              m.redraw();
+                                            },
+                                          },
+                                          [
+                                            m(
+                                              'i.pf-icon',
+                                              {style: {fontSize: '14px'}},
+                                              'chevron_right',
+                                            ),
+                                            m(
+                                              'span',
+                                              {
+                                                style: {
+                                                  fontSize: '13px',
+                                                  fontWeight: '500',
+                                                },
+                                              },
+                                              `${sqlResult.sectionTitle} (${sqlResult.rowCount} 条)`,
+                                            ),
+                                          ],
+                                        );
+                                      }
+
+                                      // Render expanded table with optional collapse toggle
+                                      return m('div', [
+                                        sqlResult.collapsible
+                                          ? m(
+                                              'div.ai-table-collapse-toggle',
+                                              {
+                                                style: {
+                                                  padding: '4px 8px',
+                                                  cursor: 'pointer',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  gap: '4px',
+                                                  fontSize: '12px',
+                                                  color:
+                                                    'var(--chat-text-secondary)',
+                                                },
+                                                onclick: () => {
+                                                  this.state.collapsedTables.add(
+                                                    msg.id,
+                                                  );
+                                                  m.redraw();
+                                                },
+                                              },
+                                              [
+                                                m(
+                                                  'i.pf-icon',
+                                                  {style: {fontSize: '12px'}},
+                                                  'expand_less',
+                                                ),
+                                                m('span', '收起'),
+                                              ],
+                                            )
+                                          : null,
+                                        m(SqlResultTable, {
+                                          columns: sqlResult.columns,
+                                          rows: sqlResult.maxVisibleRows
+                                            ? sqlResult.rows.slice(
+                                                0,
+                                                sqlResult.maxVisibleRows,
+                                              )
+                                            : sqlResult.rows,
+                                          rowCount: sqlResult.maxVisibleRows
+                                            ? Math.min(
+                                                sqlResult.rowCount,
+                                                sqlResult.maxVisibleRows,
+                                              )
+                                            : sqlResult.rowCount,
+                                          query: '', // No SQL display
+                                          title: sqlResult.sectionTitle, // Pass title to table
+                                          trace: vnode.attrs.trace,
+                                          onPin: (data) => this.handlePin(data),
+                                          onInteraction: (interaction) =>
+                                            this.handleInteraction(interaction), // v2.0 Focus Tracking
+                                          expandableData:
+                                            sqlResult.expandableData,
+                                          summary: sqlResult.summary,
+                                          metadata: sqlResult.metadata, // Pass metadata for header display
+                                        }),
+                                      ]);
+                                    }
+
+                                    // Regular SQL result with outer header
+                                    return m('div.ai-sql-card', [
+                                      m('div.ai-sql-header', [
+                                        m('div.ai-sql-title', [
+                                          m('i.pf-icon', 'table_chart'),
+                                          m(
+                                            'span',
+                                            `${sqlResult.rowCount.toLocaleString()} rows`,
+                                          ),
+                                        ]),
+                                        m('div.ai-sql-actions', [
+                                          m(
+                                            'button.ai-sql-action-btn',
+                                            {
+                                              onclick: () =>
+                                                this.copyToClipboard(query),
+                                              title: 'Copy SQL',
+                                            },
+                                            [
+                                              m('i.pf-icon', 'content_copy'),
+                                              m('span', 'Copy'),
+                                            ],
+                                          ),
+                                          query
+                                            ? m(
+                                                'button.ai-sql-action-btn',
+                                                {
+                                                  onclick: () =>
+                                                    this.handlePin({
+                                                      query,
+                                                      columns:
+                                                        sqlResult.columns,
+                                                      rows: sqlResult.rows.slice(
+                                                        0,
+                                                        100,
+                                                      ),
+                                                      timestamp: Date.now(),
+                                                    }),
+                                                  title: 'Pin result',
+                                                },
+                                                [
+                                                  m('i.pf-icon', 'push_pin'),
+                                                  m('span', 'Pin'),
+                                                ],
+                                              )
+                                            : null,
+                                        ]),
+                                      ]),
+                                      query
+                                        ? m('div.ai-sql-query', query.trim())
+                                        : null,
+                                      m(SqlResultTable, {
+                                        columns: sqlResult.columns,
+                                        rows: sqlResult.rows,
+                                        rowCount: sqlResult.rowCount,
+                                        query,
+                                        trace: vnode.attrs.trace, // 传入 trace 对象以支持时间戳跳转
+                                        onPin: (data) => this.handlePin(data),
+                                        onExport: (format) =>
+                                          this.exportResult(sqlResult, format),
+                                        onInteraction: (interaction) =>
+                                          this.handleInteraction(interaction), // v2.0 Focus Tracking
+                                        expandableData:
+                                          sqlResult.expandableData,
+                                        summary: sqlResult.summary,
+                                        metadata: sqlResult.metadata, // Pass metadata for header display
+                                      }),
+                                    ]);
+                                  })(),
+
+                                  // Chart Data Visualization
+                                  msg.chartData
+                                    ? m(
+                                        'div.ai-chart-card',
+                                        {
+                                          style: {
+                                            marginTop: '12px',
+                                            borderRadius: '8px',
+                                            border:
+                                              '1px solid var(--chat-border)',
+                                            overflow: 'hidden',
+                                          },
+                                        },
+                                        [
+                                          m(ChartVisualizer, {
+                                            chartData: msg.chartData,
+                                            width: 400,
+                                            height: 280,
+                                          }),
+                                        ],
+                                      )
+                                    : null,
+
+                                  // Metric Card Visualization
+                                  msg.metricData
+                                    ? m(
+                                        'div.ai-metric-card',
+                                        {
+                                          style: {
+                                            marginTop: '12px',
+                                            padding: '16px 20px',
+                                            borderRadius: '8px',
+                                            border:
+                                              '1px solid var(--chat-border)',
+                                            background: 'var(--chat-bg)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '16px',
+                                          },
+                                        },
+                                        (() => {
+                                          const metricStyle = metricStatusStyle(
+                                            msg.metricData.status,
+                                          );
+                                          return [
+                                            m(
+                                              'div',
+                                              {
+                                                style: {
+                                                  width: '48px',
+                                                  height: '48px',
+                                                  borderRadius: '50%',
+                                                  background: metricStyle.bg,
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  justifyContent: 'center',
+                                                },
+                                              },
+                                              [
+                                                m(
+                                                  'i.pf-icon',
+                                                  {
+                                                    style: {
+                                                      fontSize: '24px',
+                                                      color: metricStyle.fg,
+                                                    },
+                                                  },
+                                                  metricStyle.icon,
+                                                ),
+                                              ],
+                                            ),
+                                            m('div', {style: {flex: 1}}, [
+                                              m(
+                                                'div',
+                                                {
+                                                  style: {
+                                                    fontSize: '12px',
+                                                    color:
+                                                      'var(--chat-text-secondary)',
+                                                    marginBottom: '4px',
+                                                  },
+                                                },
+                                                msg.metricData.title,
+                                              ),
+                                              m(
+                                                'div',
+                                                {
+                                                  style: {
+                                                    fontSize: '28px',
+                                                    fontWeight: '600',
+                                                    color: 'var(--chat-text)',
+                                                    lineHeight: '1.2',
+                                                  },
+                                                },
+                                                [
+                                                  String(msg.metricData.value),
+                                                  msg.metricData.unit
+                                                    ? m(
+                                                        'span',
+                                                        {
+                                                          style: {
+                                                            fontSize: '14px',
+                                                            fontWeight: '400',
+                                                            color:
+                                                              'var(--chat-text-secondary)',
+                                                            marginLeft: '4px',
+                                                          },
+                                                        },
+                                                        msg.metricData.unit,
+                                                      )
+                                                    : null,
+                                                ],
+                                              ),
+                                              msg.metricData.delta
+                                                ? m(
+                                                    'div',
+                                                    {
+                                                      style: {
+                                                        fontSize: '12px',
+                                                        color:
+                                                          msg.metricData.delta.startsWith(
+                                                            '+',
+                                                          )
+                                                            ? 'var(--chat-success)'
+                                                            : msg.metricData.delta.startsWith(
+                                                                  '-',
+                                                                )
+                                                              ? 'var(--chat-error)'
+                                                              : 'var(--chat-text-secondary)',
+                                                        marginTop: '4px',
+                                                      },
+                                                    },
+                                                    msg.metricData.delta,
+                                                  )
+                                                : null,
+                                            ]),
+                                          ];
+                                        })(),
+                                      )
+                                    : null,
+                                ],
+                              ),
+
+                              // Model-change badge — below bubble, inside wrapper so it stacks vertically
+                              msg.role === 'user' &&
+                              msg.model &&
+                              msg.model !== prevUserModelMap.get(msg.id)
+                                ? m(
+                                    'div.ai-model-badge',
+                                    {
+                                      title: `Switched to: ${msg.model}`,
+                                    },
+                                    [
+                                      m(
+                                        'i.pf-icon',
+                                        {
+                                          style: {
+                                            fontSize: '11px',
+                                            verticalAlign: 'middle',
+                                          },
+                                        },
+                                        'swap_horiz',
+                                      ),
+                                      m('span', ` ${msg.model}`),
+                                    ],
+                                  )
+                                : null,
+                            ]), // end ai-bubble-wrapper
+
+                            // Feedback buttons — show on non-progress assistant messages
+                            msg.role === 'assistant' &&
+                            !isProgressMessage &&
+                            msg.content.length > 50
+                              ? m('div.ai-feedback-bar', [
+                                  m(
+                                    'button.ai-feedback-btn',
+                                    {
+                                      class:
+                                        (this.state as any)[
+                                          `feedback_${msg.id}`
+                                        ] === 'positive'
+                                          ? 'active'
+                                          : '',
+                                      title: '有用',
+                                      onclick: () => {
+                                        (this.state as any)[
+                                          `feedback_${msg.id}`
+                                        ] = 'positive';
+                                        this.submitFeedback(msg.id, 'positive');
+                                      },
+                                    },
+                                    m('i.pf-icon', 'thumb_up'),
+                                  ),
+                                  m(
+                                    'button.ai-feedback-btn',
+                                    {
+                                      class:
+                                        (this.state as any)[
+                                          `feedback_${msg.id}`
+                                        ] === 'negative'
+                                          ? 'active'
+                                          : '',
+                                      title: '不准确',
+                                      onclick: () => {
+                                        (this.state as any)[
+                                          `feedback_${msg.id}`
+                                        ] = 'negative';
+                                        this.submitFeedback(msg.id, 'negative');
+                                      },
+                                    },
+                                    m('i.pf-icon', 'thumb_down'),
+                                  ),
+                                ])
+                              : null,
+                          ],
+                        );
+                      });
+                    })(),
+
+                    // Intervention Panel (Agent-Driven Architecture v2.0)
+                    this.state.interventionState.isActive &&
+                      this.state.interventionState.intervention
+                      ? m(InterventionPanel, {
+                          state: this.state.interventionState,
+                          sessionId: this.state.agentSessionId,
+                          backendUrl: this.state.settings.backendUrl,
+                          backendApiKey: this.state.settings.backendApiKey,
+                          onStateChange: (
+                            newState: Partial<InterventionState>,
+                          ) => {
+                            this.state.interventionState = {
+                              ...this.state.interventionState,
+                              ...newState,
+                            };
+                            m.redraw();
+                          },
+                          onComplete: () => {
+                            m.redraw();
+                          },
+                        })
+                      : null,
+
+                    // Loading Indicator with phase context
+                    this.state.isLoading
+                      ? m('div.ai-message.ai-message-assistant', [
+                          m('div.ai-avatar.ai-avatar-assistant', [
+                            m('i.pf-icon', 'auto_awesome'),
+                          ]),
+                          m('div.ai-bubble.ai-bubble-assistant', [
+                            m('div.ai-typing-indicator', [
+                              m('span.ai-typing-dot'),
+                              m('span.ai-typing-dot'),
+                              m('span.ai-typing-dot'),
+                              this.state.loadingPhase
+                                ? m(
+                                    'span.ai-typing-phase',
+                                    this.state.loadingPhase,
+                                  )
+                                : null,
+                            ]),
+                          ]),
+                        ])
+                      : null,
+
+                    // Backend connecting indicator — animated progress during background upload
+                    hasUploadInProgress &&
+                      !hasBackendTrace &&
+                      !this.state.isLoading
+                      ? m('div.ai-connecting-indicator', [
+                          m('i.pf-icon', 'cloud_upload'),
+                          m('span', '正在连接 AI 后端...'),
+                          m('div.ai-upload-progress'),
+                        ])
+                      : null,
+
+                    // Inline disconnection banner — shown when backend drops mid-conversation
+                    !isInRpcMode && this.state.messages.length > 0
+                      ? m('div.ai-disconnect-banner', [
+                          m('i.pf-icon', 'cloud_off'),
+                          m('span', 'AI 后端连接已断开'),
+                          this.state.isRetryingBackend
+                            ? m('span.ai-disconnect-retrying', '重试中...')
+                            : m(
+                                'button.ai-disconnect-retry-btn',
+                                {
+                                  onclick: () => this.retryBackendConnection(),
+                                },
+                                '重试连接',
+                              ),
+                        ])
+                      : null,
+                  )
+                : null,
+
+              // Input Area - always show (disabled when disconnected)
+              isInRpcMode || this.state.messages.length > 0
+                ? m('div.ai-input-area', [
+                    // Conversation context indicator
+                    this.state.messages.length > 0 && this.state.agentSessionId
+                      ? m(
+                          'div.ai-context-indicator',
+                          `第 ${this.state.messages.filter((msg) => msg.role === 'user').length} 轮对话 | 会话 ${this.state.agentSessionId.substring(0, 8)}...`,
+                        )
+                      : null,
+                    this.renderSliceCard(),
+                    this.renderAreaCard(),
+                    this.renderAnalysisModeChips(),
+                    m('div.ai-input-wrapper', [
+                      m('textarea#ai-input.ai-input', {
+                        'class':
+                          this.state.isLoading ||
+                          !this.state.aiService ||
+                          !isInRpcMode
+                            ? 'disabled'
+                            : '',
+                        'aria-label': '\u8F93\u5165\u5206\u6790\u95EE\u9898',
+                        'placeholder': !isInRpcMode
+                          ? 'AI 后端未连接...'
+                          : 'Ask anything about your trace...',
+                        'value': this.state.input,
+                        'oninput': (e: Event) => {
+                          this.state.input = (
+                            e.target as HTMLTextAreaElement
+                          ).value;
+                          this.state.historyIndex = -1;
+                        },
+                        'onkeydown': (e: KeyboardEvent) =>
+                          this.handleKeyDown(e),
+                        'disabled':
+                          this.state.isLoading ||
+                          !this.state.aiService ||
+                          !isInRpcMode,
+                      }),
+                      m(ProviderQuickSwitcher, {
+                        backendUrl: this.state.settings.backendUrl,
+                        apiKey: this.state.settings.backendApiKey || undefined,
+                        compact: true,
+                        onActivate: () => this.refreshServerStatus(),
+                      }),
+                      m('div.ai-input-divider'),
+                      this.state.isLoading
+                        ? m(
+                            'button.ai-send-btn.ai-stop-btn',
+                            {
+                              onclick: () => this.cancelAnalysis(),
+                              title: 'Stop analysis',
+                            },
+                            m('i.pf-icon', 'stop_circle'),
+                          )
+                        : m(
+                            'button.ai-send-btn',
+                            {
+                              'class':
+                                !this.state.aiService || !isInRpcMode
+                                  ? 'disabled'
+                                  : '',
+                              'onclick': () => this.sendMessage(),
+                              'disabled': !this.state.aiService || !isInRpcMode,
+                              'title': 'Send (Enter)',
+                              'aria-label': '\u53D1\u9001',
+                            },
+                            m('i.pf-icon', 'send'),
+                          ),
+                    ]),
+                    m(
+                      'div.ai-input-hint',
+                      'Press Enter to send, Shift+Enter for new line',
+                    ),
+                    !this.state.aiService
+                      ? m('div.ai-warning', [
+                          m('i.pf-icon', 'warning'),
+                          m(
+                            'span',
+                            'AI service not configured. Click settings to set up.',
+                          ),
+                        ])
+                      : null,
+                  ])
+                : null,
+            ]), // End of ai-main-content
+
+            // Right: Session History Sidebar (总是显示，RPC 模式下)
+            isInRpcMode
+              ? this.renderSessionSidebar(sessions, currentIndex)
+              : null,
+          ],
+        ), // End of ai-content-wrapper
+      ],
     );
   }
 
@@ -1708,19 +2182,28 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       {id: 'full', label: '🔍 完整', title: '完整多轮分析流水线'},
       {id: 'auto', label: '🤖 智能', title: '按查询复杂度自动选择'},
     ] as const;
-    return m('div.ai-mode-chips',
+    return m(
+      'div.ai-mode-chips',
       modes.map((mode) => {
         const disabled = mode.id === 'fast' && fastDisabled;
         const classes = [
           current === mode.id ? 'active' : '',
           disabled ? 'disabled' : '',
-        ].filter(Boolean).join(' ');
-        return m('button.ai-mode-chip', {
-          class: classes,
-          title: disabled ? '对比模式下需完整分析才能利用参考 Trace 上下文' : mode.title,
-          disabled,
-          onclick: () => this.onAnalysisModeChange(mode.id),
-        }, mode.label);
+        ]
+          .filter(Boolean)
+          .join(' ');
+        return m(
+          'button.ai-mode-chip',
+          {
+            class: classes,
+            title: disabled
+              ? '对比模式下需完整分析才能利用参考 Trace 上下文'
+              : mode.title,
+            disabled,
+            onclick: () => this.onAnalysisModeChange(mode.id),
+          },
+          mode.label,
+        );
       }),
     );
   }
@@ -1734,7 +2217,9 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     this.state.analysisMode = newMode;
     try {
       localStorage.setItem('ai-analysis-mode', newMode);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     if (hadSession) {
       this.state.agentSessionId = null;
       this.clearAgentObservability();
@@ -1749,15 +2234,22 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     m.redraw();
   }
 
-  private submitFeedback(_messageId: string, rating: 'positive' | 'negative'): void {
+  private submitFeedback(
+    _messageId: string,
+    rating: 'positive' | 'negative',
+  ): void {
     if (!this.state.agentSessionId || !this.state.settings.backendUrl) return;
     const url = `${this.state.settings.backendUrl}/api/agent/v1/${this.state.agentSessionId}/feedback`;
-    const turnIndex = this.state.messages.filter(msg => msg.role === 'user').length;
+    const turnIndex = this.state.messages.filter(
+      (msg) => msg.role === 'user',
+    ).length;
     fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rating, turnIndex }),
-    }).catch(() => { /* non-blocking */ });
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({rating, turnIndex}),
+    }).catch(() => {
+      /* non-blocking */
+    });
     m.redraw();
   }
 
@@ -1799,7 +2291,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     return {
       ...normalized,
       'x-api-key': apiKey,
-      Authorization: normalized.Authorization || `Bearer ${apiKey}`,
+      'Authorization': normalized.Authorization || `Bearer ${apiKey}`,
     };
   }
 
@@ -1818,7 +2310,10 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       }
       if (payload.data && typeof payload.data === 'object') {
         candidates.push(payload.data);
-        if (payload.data.observability && typeof payload.data.observability === 'object') {
+        if (
+          payload.data.observability &&
+          typeof payload.data.observability === 'object'
+        ) {
           candidates.push(payload.data.observability);
         }
       }
@@ -1828,19 +2323,26 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     for (const candidate of candidates) {
       if (!candidate || typeof candidate !== 'object') continue;
 
-      const runId = typeof candidate.runId === 'string' ? candidate.runId.trim() : '';
+      const runId =
+        typeof candidate.runId === 'string' ? candidate.runId.trim() : '';
       if (runId && runId !== this.state.agentRunId) {
         this.state.agentRunId = runId;
         changed = true;
       }
 
-      const requestId = typeof candidate.requestId === 'string' ? candidate.requestId.trim() : '';
+      const requestId =
+        typeof candidate.requestId === 'string'
+          ? candidate.requestId.trim()
+          : '';
       if (requestId && requestId !== this.state.agentRequestId) {
         this.state.agentRequestId = requestId;
         changed = true;
       }
 
-      if (typeof candidate.runSequence === 'number' && Number.isFinite(candidate.runSequence)) {
+      if (
+        typeof candidate.runSequence === 'number' &&
+        Number.isFinite(candidate.runSequence)
+      ) {
         const runSequence = Math.max(0, Math.floor(candidate.runSequence));
         if (runSequence !== this.state.agentRunSequence) {
           this.state.agentRunSequence = runSequence;
@@ -1861,12 +2363,14 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
 
   private isSseStatusMessage(message: Message | undefined): boolean {
     if (!message || message.role !== 'assistant') return false;
-    return message.content.startsWith('🔄') ||
+    return (
+      message.content.startsWith('🔄') ||
       message.content.startsWith('连接中断') ||
       message.content.startsWith('正在恢复会话') ||
       message.content.startsWith('后端已重启') ||
       message.content.startsWith('后端连接') ||
-      message.content.startsWith('**Connection Error:**');
+      message.content.startsWith('**Connection Error:**')
+    );
   }
 
   private upsertSseStatusMessage(content: string): void {
@@ -1912,16 +2416,23 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
 
     try {
       const response = await this.fetchBackend(
-        `${this.state.settings.backendUrl}/api/traces/${this.state.backendTraceId}`
+        `${this.state.settings.backendUrl}/api/traces/${this.state.backendTraceId}`,
       );
       if (!response.ok) {
-        if (DEBUG_AI_PANEL) console.log(`[AIPanel] Backend trace ${this.state.backendTraceId} no longer valid, clearing`);
+        if (DEBUG_AI_PANEL)
+          console.log(
+            `[AIPanel] Backend trace ${this.state.backendTraceId} no longer valid, clearing`,
+          );
         this.state.backendTraceId = null;
         this.saveHistory();
         m.redraw();
       }
     } catch (error) {
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Failed to verify backend trace, clearing:', error);
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] Failed to verify backend trace, clearing:',
+          error,
+        );
       this.state.backendTraceId = null;
       this.saveHistory();
       m.redraw();
@@ -1932,7 +2443,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     sessionManager.saveHistory(
       this.state.messages,
       this.state.backendTraceId,
-      this.state.currentTraceFingerprint
+      this.state.currentTraceFingerprint,
     );
   }
 
@@ -1995,7 +2506,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
         agentRunId: this.state.agentRunId || undefined,
         agentRequestId: this.state.agentRequestId || undefined,
         agentRunSequence: this.state.agentRunSequence || undefined,
-      }
+      },
     );
   }
 
@@ -2060,7 +2571,10 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
 
     // If the session's backendTraceId differs from current, agentSessionId belongs to a
     // different trace — clear it to prevent traceId mismatch errors on the next request.
-    if (session.backendTraceId && this.state.backendTraceId !== session.backendTraceId) {
+    if (
+      session.backendTraceId &&
+      this.state.backendTraceId !== session.backendTraceId
+    ) {
       this.state.agentSessionId = null;
     }
 
@@ -2069,10 +2583,11 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       .filter((m) => m.role === 'user')
       .map((m) => m.content);
 
-    if (DEBUG_AI_PANEL) console.log('[AIPanel] Loaded session:', sessionId, {
-      engineInRpcMode,
-      backendTraceId: this.state.backendTraceId,
-    });
+    if (DEBUG_AI_PANEL)
+      console.log('[AIPanel] Loaded session:', sessionId, {
+        engineInRpcMode,
+        backendTraceId: this.state.backendTraceId,
+      });
     m.redraw();
     return true;
   }
@@ -2085,8 +2600,12 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       return null;
     }
 
-    const sessions = this.getSessionsForTrace(this.state.currentTraceFingerprint);
-    return sessions.find(s => s.sessionId === this.state.currentSessionId) || null;
+    const sessions = this.getSessionsForTrace(
+      this.state.currentTraceFingerprint,
+    );
+    return (
+      sessions.find((s) => s.sessionId === this.state.currentSessionId) || null
+    );
   }
 
   /**
@@ -2109,7 +2628,12 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
 
   // ============ Session 管理方法结束 ============
 
-  private handlePin(data: {query: string, columns: string[], rows: any[][], timestamp: number}) {
+  private handlePin(data: {
+    query: string;
+    columns: string[];
+    rows: any[][];
+    timestamp: number;
+  }) {
     const pinnedResult: PinnedResult = {
       id: this.generateId(),
       query: data.query,
@@ -2119,7 +2643,10 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     };
 
     // Add to pinned results (keep max 20)
-    this.state.pinnedResults = [pinnedResult, ...this.state.pinnedResults].slice(0, 20);
+    this.state.pinnedResults = [
+      pinnedResult,
+      ...this.state.pinnedResults,
+    ].slice(0, 20);
     this.savePinnedResults();
 
     // Show notification
@@ -2143,32 +2670,48 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
 
     // Only send if we have an active session
     if (!sessionId) {
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] No active session, skipping interaction capture');
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] No active session, skipping interaction capture',
+        );
       return;
     }
 
     // Fire and forget - don't block UI for interaction tracking
-    this.fetchBackend(buildAssistantApiV1Url(backendUrl, `/${sessionId}/interaction`), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    this.fetchBackend(
+      buildAssistantApiV1Url(backendUrl, `/${sessionId}/interaction`),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: interaction.type,
+          target: interaction.target,
+          source: interaction.source,
+          timestamp: interaction.timestamp,
+          context: interaction.context,
+        }),
       },
-      body: JSON.stringify({
-        type: interaction.type,
-        target: interaction.target,
-        source: interaction.source,
-        timestamp: interaction.timestamp,
-        context: interaction.context,
-      }),
-    }).then((response) => {
-      if (!response.ok) {
-        console.warn('[AIPanel] Failed to send interaction:', response.status);
-      } else {
-        if (DEBUG_AI_PANEL) console.log('[AIPanel] Interaction captured:', interaction.type, interaction.target);
-      }
-    }).catch((error) => {
-      console.warn('[AIPanel] Error sending interaction:', error);
-    });
+    )
+      .then((response) => {
+        if (!response.ok) {
+          console.warn(
+            '[AIPanel] Failed to send interaction:',
+            response.status,
+          );
+        } else {
+          if (DEBUG_AI_PANEL)
+            console.log(
+              '[AIPanel] Interaction captured:',
+              interaction.type,
+              interaction.target,
+            );
+        }
+      })
+      .catch((error) => {
+        console.warn('[AIPanel] Error sending interaction:', error);
+      });
   }
 
   private initAIService() {
@@ -2187,7 +2730,10 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
    * Check backend server status by calling /health with optional auth headers.
    * Used by SettingsModal to test with potentially unsaved URL/key values.
    */
-  private async checkServerStatus(backendUrl: string, apiKey: string): Promise<ServerStatus> {
+  private async checkServerStatus(
+    backendUrl: string,
+    apiKey: string,
+  ): Promise<ServerStatus> {
     try {
       const headers: Record<string, string> = {};
       const trimmedKey = (apiKey || '').trim();
@@ -2195,7 +2741,9 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
         headers['x-api-key'] = trimmedKey;
         headers['Authorization'] = `Bearer ${trimmedKey}`;
       }
-      const response = await fetch(`${backendUrl.replace(/\/+$/, '')}/health`, {headers});
+      const response = await fetch(`${backendUrl.replace(/\/+$/, '')}/health`, {
+        headers,
+      });
       if (!response.ok) return {connected: false};
       const data = await response.json();
       return {
@@ -2272,7 +2820,7 @@ Click ⚙️ to configure backend connection.`;
     } else {
       this.state.historyIndex = Math.max(
         -1,
-        Math.min(history.length, this.state.historyIndex + direction)
+        Math.min(history.length, this.state.historyIndex + direction),
       );
     }
 
@@ -2285,7 +2833,13 @@ Click ⚙️ to configure backend connection.`;
 
   private async sendMessage() {
     const input = this.state.input.trim();
-    if (DEBUG_AI_PANEL) console.log('[AIPanel] sendMessage called, input:', input, 'isLoading:', this.state.isLoading);
+    if (DEBUG_AI_PANEL)
+      console.log(
+        '[AIPanel] sendMessage called, input:',
+        input,
+        'isLoading:',
+        this.state.isLoading,
+      );
 
     if (!input || this.state.isLoading) return;
 
@@ -2297,12 +2851,17 @@ Click ⚙️ to configure backend connection.`;
     // P2-1: Exclude welcome/system-generated assistant messages — only count as
     // prior results when there has been at least one user message (i.e., an analysis
     // round actually ran, not just a welcome message).
-    const hasUserMessages = this.state.messages.some((msg) => msg.role === 'user');
-    const hasPriorResults = hasUserMessages && this.state.messages.some(
-      (msg) => msg.role === 'assistant' && msg.flowTag !== 'round_separator'
+    const hasUserMessages = this.state.messages.some(
+      (msg) => msg.role === 'user',
     );
+    const hasPriorResults =
+      hasUserMessages &&
+      this.state.messages.some(
+        (msg) => msg.role === 'assistant' && msg.flowTag !== 'round_separator',
+      );
     if (hasPriorResults) {
-      const roundNumber = this.state.messages.filter(m => m.role === 'user').length + 1;
+      const roundNumber =
+        this.state.messages.filter((m) => m.role === 'user').length + 1;
       this.addMessage({
         id: this.generateId(),
         role: 'system',
@@ -2329,7 +2888,8 @@ Click ⚙️ to configure backend connection.`;
     if (input.startsWith('/')) {
       await this.handleCommand(input);
     } else {
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Calling handleChatMessage with:', input);
+      if (DEBUG_AI_PANEL)
+        console.log('[AIPanel] Calling handleChatMessage with:', input);
       await this.handleChatMessage(input);
       if (DEBUG_AI_PANEL) console.log('[AIPanel] handleChatMessage completed');
     }
@@ -2389,10 +2949,13 @@ Click ⚙️ to configure backend connection.`;
     let query: string;
     if (sel.kind === 'area') {
       const timeSpan = this.trace.selection.getTimeSpanOfSelection();
-      const durMs = timeSpan ? (Number(timeSpan.duration) / 1e6).toFixed(1) : '?';
+      const durMs = timeSpan
+        ? (Number(timeSpan.duration) / 1e6).toFixed(1)
+        : '?';
       query = `分析用户选中区间的性能（${durMs}ms），包括关键线程的 CPU 调度、大小核分布和频率、主要耗时 Slice 诊断`;
     } else if (sel.kind === 'track_event') {
-      query = '分析用户选中的这个 Slice：它是什么、子调用链耗时分解、与历史同类 Slice 对比是否异常、根因分析';
+      query =
+        '分析用户选中的这个 Slice：它是什么、子调用链耗时分解、与历史同类 Slice 对比是否异常、根因分析';
     } else {
       return;
     }
@@ -2408,19 +2971,32 @@ Click ⚙️ to configure backend connection.`;
   private analyzeScene(scene: import('./scene_navigation_bar').DetectedScene) {
     if (this.state.isLoading) return;
     const typeNames: Record<string, string> = {
-      cold_start: '冷启动', warm_start: '温启动', hot_start: '热启动',
-      scroll: '滑动', inertial_scroll: '惯性滑动', scroll_start: '滑动',
-      app_switch: '应用切换', home_screen: '桌面', app_foreground: '应用内',
+      cold_start: '冷启动',
+      warm_start: '温启动',
+      hot_start: '热启动',
+      scroll: '滑动',
+      inertial_scroll: '惯性滑动',
+      scroll_start: '滑动',
+      app_switch: '应用切换',
+      home_screen: '桌面',
+      app_foreground: '应用内',
       navigation: '页面跳转',
-      tap: '点击响应', long_press: '长按响应',
-      screen_on: '亮屏', screen_unlock: '解锁',
-      back_key: '返回键', home_key: 'Home键', recents_key: '最近任务键',
-      anr: 'ANR', ime_show: '键盘弹出', ime_hide: '键盘收起',
+      tap: '点击响应',
+      long_press: '长按响应',
+      screen_on: '亮屏',
+      screen_unlock: '解锁',
+      back_key: '返回键',
+      home_key: 'Home键',
+      recents_key: '最近任务键',
+      anr: 'ANR',
+      ime_show: '键盘弹出',
+      ime_hide: '键盘收起',
       window_transition: '窗口转场',
     };
     const typeName = typeNames[scene.type] || scene.type;
     const appHint = scene.appPackage ? ` (${scene.appPackage})` : '';
-    const durHint = scene.durationMs > 0 ? `，耗时 ${scene.durationMs.toFixed(0)}ms` : '';
+    const durHint =
+      scene.durationMs > 0 ? `，耗时 ${scene.durationMs.toFixed(0)}ms` : '';
     const query = `分析${typeName}性能${appHint}${durHint}`;
     this.state.input = query;
     this.sendMessage();
@@ -2444,7 +3020,7 @@ Click ⚙️ to configure backend connection.`;
       updateMessage: (
         messageId: string,
         updates: Partial<Message>,
-        options?: {persist?: boolean}
+        options?: {persist?: boolean},
       ) => this.updateMessage(messageId, updates, options),
       generateId: () => this.generateId(),
       getMessages: () => this.state.messages,
@@ -2481,9 +3057,8 @@ Click ⚙️ to configure backend connection.`;
       // Track overlay — create timeline tracks when overlay-eligible data arrives
       onOverlayDataReceived: (overlayId, columns, rows) => {
         if (this.trace) {
-          createOverlayTrack(this.trace, overlayId, columns, rows).catch(
-            (e) =>
-              console.error(`[AIPanel] Overlay ${overlayId} failed:`, e),
+          createOverlayTrack(this.trace, overlayId, columns, rows).catch((e) =>
+            console.error(`[AIPanel] Overlay ${overlayId} failed:`, e),
           );
         }
       },
@@ -2590,16 +3165,19 @@ Click ⚙️ to configure backend connection.`;
       this.addMessage({
         id: this.generateId(),
         role: 'assistant',
-        content: '**No pinned results yet.**\n\nUse the 📌 Pin button on SQL results to save them here.',
+        content:
+          '**No pinned results yet.**\n\nUse the 📌 Pin button on SQL results to save them here.',
         timestamp: Date.now(),
       });
       return;
     }
 
-    const pinsList = this.state.pinnedResults.map((pin, index) => {
-      const date = new Date(pin.timestamp).toLocaleString();
-      return `**${index + 1}.** ${pin.query.substring(0, 60)}${pin.query.length > 60 ? '...' : ''}\n   - ${pin.rows.length} rows • ${date}`;
-    }).join('\n\n');
+    const pinsList = this.state.pinnedResults
+      .map((pin, index) => {
+        const date = new Date(pin.timestamp).toLocaleString();
+        return `**${index + 1}.** ${pin.query.substring(0, 60)}${pin.query.length > 60 ? '...' : ''}\n   - ${pin.rows.length} rows • ${date}`;
+      })
+      .join('\n\n');
 
     this.addMessage({
       id: this.generateId(),
@@ -2614,7 +3192,8 @@ Click ⚙️ to configure backend connection.`;
       this.addMessage({
         id: this.generateId(),
         role: 'assistant',
-        content: 'Please provide a SQL query. Example: `/sql SELECT * FROM slice LIMIT 10`',
+        content:
+          'Please provide a SQL query. Example: `/sql SELECT * FROM slice LIMIT 10`',
         timestamp: Date.now(),
       });
       return;
@@ -2730,7 +3309,8 @@ Click ⚙️ to configure backend connection.`;
       this.addMessage({
         id: this.generateId(),
         role: 'assistant',
-        content: '**No selection found.** Please click on a slice in the timeline to select it, then use `/analyze`.',
+        content:
+          '**No selection found.** Please click on a slice in the timeline to select it, then use `/analyze`.',
         timestamp: Date.now(),
       });
       return;
@@ -2790,7 +3370,8 @@ Click ⚙️ to configure backend connection.`;
         this.addMessage({
           id: this.generateId(),
           role: 'assistant',
-          content: '**Error:** Could not find slice details. The slice may have been removed or the track may not be a slice track.',
+          content:
+            '**Error:** Could not find slice details. The slice may have been removed or the track may not be a slice track.',
           timestamp: Date.now(),
         });
         this.setLoadingState(false);
@@ -2846,7 +3427,7 @@ Output MUST follow this exact markdown structure:
         try {
           const response = await this.state.aiService.chat([
             {role: 'system', content: systemPrompt},
-            {role: 'user', content: userPrompt}
+            {role: 'user', content: userPrompt},
           ]);
 
           this.addMessage({
@@ -2885,7 +3466,9 @@ Output MUST follow this exact markdown structure:
     m.redraw();
   }
 
-  private async analyzeAreaSelection(selection: import('../../public/selection').AreaSelection) {
+  private async analyzeAreaSelection(
+    selection: import('../../public/selection').AreaSelection,
+  ) {
     this.setLoadingState(true);
     m.redraw();
 
@@ -2944,7 +3527,10 @@ Output MUST follow this exact markdown structure:
       this.addMessage({
         id: this.generateId(),
         role: 'assistant',
-        content: summary + timeInfo + `\nFound **${rows.length}** slice types in this selection.`,
+        content:
+          summary +
+          timeInfo +
+          `\nFound **${rows.length}** slice types in this selection.`,
         timestamp: Date.now(),
         sqlResult: {columns, rows, rowCount: rows.length},
       });
@@ -2968,7 +3554,9 @@ Output MUST follow this exact markdown structure:
    * Query slice metadata for the Slice Selected card.
    * Called when selection changes to a track_event.
    */
-  private async querySliceCardInfo(eventId: number): Promise<SliceCardInfo | null> {
+  private async querySliceCardInfo(
+    eventId: number,
+  ): Promise<SliceCardInfo | null> {
     if (!this.engine) return null;
     try {
       const result = await this.engine.query(`
@@ -2985,8 +3573,15 @@ Output MUST follow this exact markdown structure:
         WHERE s.id = ${eventId}
       `);
       const it = result.iter({
-        id: NUM_NULL, name: STR_NULL, ts: LONG, dur: LONG, dur_ms: NUM_NULL,
-        thread_name: STR_NULL, process_name: STR_NULL, depth: NUM_NULL, child_count: NUM_NULL,
+        id: NUM_NULL,
+        name: STR_NULL,
+        ts: LONG,
+        dur: LONG,
+        dur_ms: NUM_NULL,
+        thread_name: STR_NULL,
+        process_name: STR_NULL,
+        depth: NUM_NULL,
+        child_count: NUM_NULL,
       });
       if (!it.valid()) return null;
       return {
@@ -3008,14 +3603,27 @@ Output MUST follow this exact markdown structure:
   /**
    * Query area metadata for the Area Selected card.
    */
-  private async queryAreaCardInfo(startNs: number, endNs: number): Promise<AreaCardInfo> {
+  private async queryAreaCardInfo(
+    startNs: number,
+    endNs: number,
+  ): Promise<AreaCardInfo> {
     const durationMs = (endNs - startNs) / 1e6;
     let sliceCount = 0;
     let trackCount = 0;
     let jankCount = 0;
-    const topSlices: Array<{ name: string; durMs: number; count: number }> = [];
+    const topSlices: Array<{name: string; durMs: number; count: number}> = [];
 
-    if (!this.engine) return { startNs, endNs, durationMs, sliceCount, trackCount, topSlices, hasJank: false, jankCount };
+    if (!this.engine)
+      return {
+        startNs,
+        endNs,
+        durationMs,
+        sliceCount,
+        trackCount,
+        topSlices,
+        hasJank: false,
+        jankCount,
+      };
 
     try {
       const r = await this.engine.query(`
@@ -3023,9 +3631,14 @@ Output MUST follow this exact markdown structure:
         FROM slice s
         WHERE s.ts >= ${startNs} AND s.ts + s.dur <= ${endNs} AND s.dur > 0
       `);
-      const it = r.iter({ cnt: NUM_NULL, tracks: NUM_NULL });
-      if (it.valid()) { sliceCount = Number(it.cnt ?? 0); trackCount = Number(it.tracks ?? 0); }
-    } catch { /* ignore */ }
+      const it = r.iter({cnt: NUM_NULL, tracks: NUM_NULL});
+      if (it.valid()) {
+        sliceCount = Number(it.cnt ?? 0);
+        trackCount = Number(it.tracks ?? 0);
+      }
+    } catch {
+      /* ignore */
+    }
 
     try {
       const r = await this.engine.query(`
@@ -3034,10 +3647,20 @@ Output MUST follow this exact markdown structure:
         WHERE s.ts >= ${startNs} AND s.ts + s.dur <= ${endNs} AND s.dur > 0
         GROUP BY s.name ORDER BY total_ms DESC LIMIT 5
       `);
-      for (const it = r.iter({ name: STR_NULL, cnt: NUM_NULL, total_ms: NUM_NULL }); it.valid(); it.next()) {
-        topSlices.push({ name: String(it.name ?? ''), durMs: Number(it.total_ms ?? 0), count: Number(it.cnt ?? 0) });
+      for (
+        const it = r.iter({name: STR_NULL, cnt: NUM_NULL, total_ms: NUM_NULL});
+        it.valid();
+        it.next()
+      ) {
+        topSlices.push({
+          name: String(it.name ?? ''),
+          durMs: Number(it.total_ms ?? 0),
+          count: Number(it.cnt ?? 0),
+        });
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     try {
       const r = await this.engine.query(`
@@ -3045,11 +3668,22 @@ Output MUST follow this exact markdown structure:
         WHERE ts >= ${startNs} AND ts + dur <= ${endNs}
           AND jank_type IS NOT NULL AND jank_type != 'None'
       `);
-      const it = r.iter({ cnt: NUM_NULL });
+      const it = r.iter({cnt: NUM_NULL});
       if (it.valid()) jankCount = Number(it.cnt ?? 0);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
-    return { startNs, endNs, durationMs, sliceCount, trackCount, topSlices, hasJank: jankCount > 0, jankCount };
+    return {
+      startNs,
+      endNs,
+      durationMs,
+      sliceCount,
+      trackCount,
+      topSlices,
+      hasJank: jankCount > 0,
+      jankCount,
+    };
   }
 
   /**
@@ -3064,19 +3698,27 @@ Output MUST follow this exact markdown structure:
     const sel = this.trace.selection.selection;
     const datasets: TraceDataset[] = [];
 
-    const runQuery = async (label: string, sql: string, schema: Record<string, any>): Promise<void> => {
+    const runQuery = async (
+      label: string,
+      sql: string,
+      schema: Record<string, any>,
+    ): Promise<void> => {
       try {
         const result = await this.engine!.query(sql);
         const columns = Object.keys(schema);
         const rows: unknown[][] = [];
         for (const it = result.iter(schema); it.valid(); it.next()) {
-          rows.push(columns.map(c => {
-            const v = (it as any)[c];
-            return typeof v === 'bigint' ? Number(v) : (v ?? null);
-          }));
+          rows.push(
+            columns.map((c) => {
+              const v = (it as any)[c];
+              return typeof v === 'bigint' ? Number(v) : v ?? null;
+            }),
+          );
         }
-        if (rows.length > 0) datasets.push({ label, columns, rows });
-      } catch { /* ignore — table may not exist */ }
+        if (rows.length > 0) datasets.push({label, columns, rows});
+      } catch {
+        /* ignore — table may not exist */
+      }
     };
 
     if (sel.kind === 'track_event') {
@@ -3086,7 +3728,9 @@ Output MUST follow this exact markdown structure:
       const endNs = tsNs + durNs;
 
       // 1) Slice details + thread/process
-      await runQuery(`slice id=${id}`, `
+      await runQuery(
+        `slice id=${id}`,
+        `
         SELECT s.id, s.name, s.ts, s.dur, CAST(s.dur/1e6 AS REAL) as dur_ms,
           t.name as thread_name, p.name as process_name, s.depth, t.utid, t.tid
         FROM slice s
@@ -3094,11 +3738,25 @@ Output MUST follow this exact markdown structure:
         LEFT JOIN thread t ON tt.utid = t.utid
         LEFT JOIN process p ON t.upid = p.upid
         WHERE s.id = ${id}
-      `, { id: NUM_NULL, name: STR_NULL, ts: LONG, dur: LONG, dur_ms: NUM_NULL,
-           thread_name: STR_NULL, process_name: STR_NULL, depth: NUM_NULL, utid: NUM_NULL, tid: NUM_NULL });
+      `,
+        {
+          id: NUM_NULL,
+          name: STR_NULL,
+          ts: LONG,
+          dur: LONG,
+          dur_ms: NUM_NULL,
+          thread_name: STR_NULL,
+          process_name: STR_NULL,
+          depth: NUM_NULL,
+          utid: NUM_NULL,
+          tid: NUM_NULL,
+        },
+      );
 
       // 2) Ancestor chain (up to 10 levels)
-      await runQuery(`caller chain of slice ${id}`, `
+      await runQuery(
+        `caller chain of slice ${id}`,
+        `
         WITH RECURSIVE ancestors(id, parent_id, name, dur, depth) AS (
           SELECT id, parent_id, name, dur, depth FROM slice WHERE id = ${id}
           UNION ALL
@@ -3107,48 +3765,77 @@ Output MUST follow this exact markdown structure:
         )
         SELECT id, name, CAST(dur/1e6 AS REAL) as dur_ms, depth
         FROM ancestors WHERE id != ${id} ORDER BY depth ASC
-      `, { id: NUM_NULL, name: STR_NULL, dur_ms: NUM_NULL, depth: NUM_NULL });
+      `,
+        {id: NUM_NULL, name: STR_NULL, dur_ms: NUM_NULL, depth: NUM_NULL},
+      );
 
       // 3) Direct children (call tree)
-      await runQuery(`children of slice ${id}`, `
+      await runQuery(
+        `children of slice ${id}`,
+        `
         SELECT id, name, CAST(dur/1e6 AS REAL) as dur_ms, depth,
           ROUND(dur * 100.0 / NULLIF((SELECT dur FROM slice WHERE id = ${id}), 0), 1) as pct
         FROM slice WHERE parent_id = ${id} ORDER BY dur DESC LIMIT 50
-      `, { id: NUM_NULL, name: STR_NULL, dur_ms: NUM_NULL, depth: NUM_NULL, pct: NUM_NULL });
+      `,
+        {
+          id: NUM_NULL,
+          name: STR_NULL,
+          dur_ms: NUM_NULL,
+          depth: NUM_NULL,
+          pct: NUM_NULL,
+        },
+      );
 
       // 4) Thread state distribution
       if (durNs > 0) {
-        await runQuery(`thread state during slice ${id}`, `
+        await runQuery(
+          `thread state during slice ${id}`,
+          `
           SELECT cpu, state, COUNT(*) AS cnt, CAST(SUM(dur)/1e6 AS REAL) as total_ms,
             CAST(SUM(dur)*100.0/${durNs} AS REAL) as pct
           FROM thread_state
           WHERE utid = (SELECT tt.utid FROM slice s JOIN thread_track tt ON s.track_id=tt.id WHERE s.id=${id})
             AND ts >= ${tsNs} AND ts <= ${endNs}
           GROUP BY cpu, state ORDER BY total_ms DESC
-        `, { cpu: NUM_NULL, state: STR_NULL, cnt: NUM_NULL, total_ms: NUM_NULL, pct: NUM_NULL });
+        `,
+          {
+            cpu: NUM_NULL,
+            state: STR_NULL,
+            cnt: NUM_NULL,
+            total_ms: NUM_NULL,
+            pct: NUM_NULL,
+          },
+        );
       }
-
     } else if (sel.kind === 'area') {
       const startNs = Number(sel.start);
       const endNs = Number(sel.end);
 
       // Top slices by total duration
-      await runQuery(`top slices in range`, `
+      await runQuery(
+        `top slices in range`,
+        `
         SELECT s.name, COUNT(*) as cnt, CAST(SUM(s.dur)/1e6 AS REAL) as total_ms,
           CAST(AVG(s.dur)/1e6 AS REAL) as avg_ms
         FROM slice s
         WHERE s.ts >= ${startNs} AND s.ts + s.dur <= ${endNs} AND s.dur > 0
         GROUP BY s.name ORDER BY total_ms DESC LIMIT 20
-      `, { name: STR_NULL, cnt: NUM_NULL, total_ms: NUM_NULL, avg_ms: NUM_NULL });
+      `,
+        {name: STR_NULL, cnt: NUM_NULL, total_ms: NUM_NULL, avg_ms: NUM_NULL},
+      );
 
       // Thread state summary
-      await runQuery(`thread states in range`, `
+      await runQuery(
+        `thread states in range`,
+        `
         SELECT t.name as thread_name, ts.state,
           CAST(SUM(ts.dur)/1e6 AS REAL) as total_ms
         FROM thread_state ts JOIN thread t ON ts.utid = t.utid
         WHERE ts.ts >= ${startNs} AND ts.ts <= ${endNs}
         GROUP BY t.name, ts.state ORDER BY total_ms DESC LIMIT 30
-      `, { thread_name: STR_NULL, state: STR_NULL, total_ms: NUM_NULL });
+      `,
+        {thread_name: STR_NULL, state: STR_NULL, total_ms: NUM_NULL},
+      );
     }
 
     return datasets;
@@ -3157,9 +3844,12 @@ Output MUST follow this exact markdown structure:
   private updateSliceCard(): void {
     if (!this.trace) return;
     const sel = this.trace.selection.selection;
-    const selKey = sel.kind === 'track_event' ? `te-${sel.eventId}`
-      : sel.kind === 'area' ? `area-${Number(sel.start)}-${Number(sel.end)}`
-      : 'none';
+    const selKey =
+      sel.kind === 'track_event'
+        ? `te-${sel.eventId}`
+        : sel.kind === 'area'
+          ? `area-${Number(sel.start)}-${Number(sel.end)}`
+          : 'none';
     if (selKey === this.state.sliceCardPrevSelId) return;
     this.state.sliceCardPrevSelId = selKey;
     this.state.sliceCardDismissed = false;
@@ -3171,10 +3861,12 @@ Output MUST follow this exact markdown structure:
         m.redraw();
       });
     } else if (sel.kind === 'area') {
-      this.queryAreaCardInfo(Number(sel.start), Number(sel.end)).then((info) => {
-        this.state.areaCardInfo = info;
-        m.redraw();
-      });
+      this.queryAreaCardInfo(Number(sel.start), Number(sel.end)).then(
+        (info) => {
+          this.state.areaCardInfo = info;
+          m.redraw();
+        },
+      );
     }
   }
 
@@ -3211,40 +3903,88 @@ Output MUST follow this exact markdown structure:
     return m('div.sp-sel-card', [
       m('div.sp-sel-card-header', [
         m('span.sp-sel-card-title', `⬛ Slice Selected${isSlow ? ' ⚠️' : ''}`),
-        m('button.sp-sel-card-dismiss', {
-          onclick: () => { this.state.sliceCardDismissed = true; m.redraw(); },
-          title: 'Dismiss',
-        }, '✕'),
+        m(
+          'button.sp-sel-card-dismiss',
+          {
+            onclick: () => {
+              this.state.sliceCardDismissed = true;
+              m.redraw();
+            },
+            title: 'Dismiss',
+          },
+          '✕',
+        ),
       ]),
       m('div.sp-sel-card-meta', [
         m('span.sp-meta-pill', [m('strong', info.name)]),
         m('span.sp-meta-pill', ['⏱ ', m('strong', dur)]),
-        info.threadName ? m('span.sp-meta-pill', ['🧵 ', info.threadName]) : null,
-        info.processName ? m('span.sp-meta-pill', ['📦 ', info.processName]) : null,
-        info.childCount > 0 ? m('span.sp-meta-pill', ['🌿 ', `${info.childCount} children`]) : null,
-        m('span.sp-meta-pill', {
-          style: 'cursor:pointer',
-          title: 'Jump to timestamp',
-          onclick: () => this.trace!.timeline.panIntoView(Time.fromRaw(BigInt(info.ts))),
-        }, [`📍 `, `${(info.ts / 1e6).toFixed(1)}ms`]),
+        info.threadName
+          ? m('span.sp-meta-pill', ['🧵 ', info.threadName])
+          : null,
+        info.processName
+          ? m('span.sp-meta-pill', ['📦 ', info.processName])
+          : null,
+        info.childCount > 0
+          ? m('span.sp-meta-pill', ['🌿 ', `${info.childCount} children`])
+          : null,
+        m(
+          'span.sp-meta-pill',
+          {
+            style: 'cursor:pointer',
+            title: 'Jump to timestamp',
+            onclick: () =>
+              this.trace!.timeline.panIntoView(Time.fromRaw(BigInt(info.ts))),
+          },
+          [`📍 `, `${(info.ts / 1e6).toFixed(1)}ms`],
+        ),
       ]),
       m('div.sp-sel-card-actions', [
-        m('button.sp-action-btn.sp-action-btn--primary', {
-          onclick: () => onAction(`分析这个 Slice：${info.name}（${dur}），找出性能问题和根因`),
-          disabled: this.state.isLoading,
-        }, '🔍 分析此 Slice'),
-        m('button.sp-action-btn.sp-action-btn--secondary', {
-          onclick: () => onAction(`找出 "${info.name}" 耗时 ${dur} 的根本原因，分析调用链和子调用`),
-          disabled: this.state.isLoading,
-        }, '🔎 找根因'),
-        m('button.sp-action-btn.sp-action-btn--secondary', {
-          onclick: () => onAction(`展示 "${info.name}" 的完整调用链，包括父调用和子调用，并找出最耗时的部分`),
-          disabled: this.state.isLoading,
-        }, '📊 调用链'),
-        isSlow ? m('button.sp-action-btn.sp-action-btn--secondary', {
-          onclick: () => onAction(`"${info.name}" 耗时 ${dur} 超过帧预算（16ms），分析为什么会卡顿`),
-          disabled: this.state.isLoading,
-        }, '🚨 卡顿分析') : null,
+        m(
+          'button.sp-action-btn.sp-action-btn--primary',
+          {
+            onclick: () =>
+              onAction(
+                `分析这个 Slice：${info.name}（${dur}），找出性能问题和根因`,
+              ),
+            disabled: this.state.isLoading,
+          },
+          '🔍 分析此 Slice',
+        ),
+        m(
+          'button.sp-action-btn.sp-action-btn--secondary',
+          {
+            onclick: () =>
+              onAction(
+                `找出 "${info.name}" 耗时 ${dur} 的根本原因，分析调用链和子调用`,
+              ),
+            disabled: this.state.isLoading,
+          },
+          '🔎 找根因',
+        ),
+        m(
+          'button.sp-action-btn.sp-action-btn--secondary',
+          {
+            onclick: () =>
+              onAction(
+                `展示 "${info.name}" 的完整调用链，包括父调用和子调用，并找出最耗时的部分`,
+              ),
+            disabled: this.state.isLoading,
+          },
+          '📊 调用链',
+        ),
+        isSlow
+          ? m(
+              'button.sp-action-btn.sp-action-btn--secondary',
+              {
+                onclick: () =>
+                  onAction(
+                    `"${info.name}" 耗时 ${dur} 超过帧预算（16ms），分析为什么会卡顿`,
+                  ),
+                disabled: this.state.isLoading,
+              },
+              '🚨 卡顿分析',
+            )
+          : null,
       ]),
     ]);
   }
@@ -3275,50 +4015,105 @@ Output MUST follow this exact markdown structure:
 
     return m('div.sp-sel-card', [
       m('div.sp-sel-card-header', [
-        m('span.sp-sel-card-title', `⬜ 时间范围选中${info.hasJank ? ' ⚠️ Jank' : ''}`),
-        m('button.sp-sel-card-dismiss', {
-          onclick: () => { this.state.sliceCardDismissed = true; m.redraw(); },
-          title: 'Dismiss',
-        }, '✕'),
+        m(
+          'span.sp-sel-card-title',
+          `⬜ 时间范围选中${info.hasJank ? ' ⚠️ Jank' : ''}`,
+        ),
+        m(
+          'button.sp-sel-card-dismiss',
+          {
+            onclick: () => {
+              this.state.sliceCardDismissed = true;
+              m.redraw();
+            },
+            title: 'Dismiss',
+          },
+          '✕',
+        ),
       ]),
       m('div.sp-sel-card-meta', [
         m('span.sp-meta-pill', ['⏱ ', m('strong', dur)]),
         m('span.sp-meta-pill', ['📍 ', `${startMs}ms – ${endMs}ms`]),
-        info.sliceCount > 0 ? m('span.sp-meta-pill', ['📋 ', `${info.sliceCount} slices`]) : null,
-        info.trackCount > 0 ? m('span.sp-meta-pill', ['🎛 ', `${info.trackCount} tracks`]) : null,
-        info.hasJank ? m('span.sp-meta-pill', {
-          style: 'background:#fef2f2;border-color:#fca5a5;color:#b91c1c',
-        }, ['⚠️ ', `${info.jankCount} jank frames`]) : null,
+        info.sliceCount > 0
+          ? m('span.sp-meta-pill', ['📋 ', `${info.sliceCount} slices`])
+          : null,
+        info.trackCount > 0
+          ? m('span.sp-meta-pill', ['🎛 ', `${info.trackCount} tracks`])
+          : null,
+        info.hasJank
+          ? m(
+              'span.sp-meta-pill',
+              {
+                style: 'background:#fef2f2;border-color:#fca5a5;color:#b91c1c',
+              },
+              ['⚠️ ', `${info.jankCount} jank frames`],
+            )
+          : null,
       ]),
       info.topSlices.length > 0
-        ? m('div', { style: 'padding: 0 10px 5px; font-size:11px; color:#6b7280' }, [
-            'Top: ',
-            info.topSlices.slice(0, 3).map((s, i) =>
-              m('span', { style: 'margin-right:6px' }, [
-                i > 0 ? '· ' : '',
-                m('strong', s.name.length > 30 ? s.name.slice(0, 30) + '…' : s.name),
-                ` (${this.fmtDurMs(s.durMs)})`,
-              ]),
-            ),
-          ])
+        ? m(
+            'div',
+            {style: 'padding: 0 10px 5px; font-size:11px; color:#6b7280'},
+            [
+              'Top: ',
+              info.topSlices
+                .slice(0, 3)
+                .map((s, i) =>
+                  m('span', {style: 'margin-right:6px'}, [
+                    i > 0 ? '· ' : '',
+                    m(
+                      'strong',
+                      s.name.length > 30 ? s.name.slice(0, 30) + '…' : s.name,
+                    ),
+                    ` (${this.fmtDurMs(s.durMs)})`,
+                  ]),
+                ),
+            ],
+          )
         : null,
       m('div.sp-sel-card-actions', [
-        m('button.sp-action-btn.sp-action-btn--primary', {
-          onclick: () => onAction(`分析 ${startMs}ms–${endMs}ms 这段时间范围（${dur}），找出性能瓶颈`),
-          disabled: this.state.isLoading,
-        }, '🔍 分析此时间段'),
-        info.hasJank ? m('button.sp-action-btn.sp-action-btn--secondary', {
-          onclick: () => onAction(`分析 ${startMs}ms–${endMs}ms 范围内的 ${info.jankCount} 个 Jank 帧，找出卡顿根因`),
-          disabled: this.state.isLoading,
-        }, '🚨 找卡顿原因') : null,
-        m('button.sp-action-btn.sp-action-btn--secondary', {
-          onclick: () => onAction(`找出 ${startMs}ms–${endMs}ms 时间段内主线程的耗时操作`),
-          disabled: this.state.isLoading,
-        }, '🧵 主线程分析'),
-        m('button.sp-action-btn.sp-action-btn--secondary', {
-          onclick: () => onAction(`分析 ${startMs}ms–${endMs}ms 内的 Binder 调用和锁竞争`),
-          disabled: this.state.isLoading,
-        }, '🔗 Binder/锁'),
+        m(
+          'button.sp-action-btn.sp-action-btn--primary',
+          {
+            onclick: () =>
+              onAction(
+                `分析 ${startMs}ms–${endMs}ms 这段时间范围（${dur}），找出性能瓶颈`,
+              ),
+            disabled: this.state.isLoading,
+          },
+          '🔍 分析此时间段',
+        ),
+        info.hasJank
+          ? m(
+              'button.sp-action-btn.sp-action-btn--secondary',
+              {
+                onclick: () =>
+                  onAction(
+                    `分析 ${startMs}ms–${endMs}ms 范围内的 ${info.jankCount} 个 Jank 帧，找出卡顿根因`,
+                  ),
+                disabled: this.state.isLoading,
+              },
+              '🚨 找卡顿原因',
+            )
+          : null,
+        m(
+          'button.sp-action-btn.sp-action-btn--secondary',
+          {
+            onclick: () =>
+              onAction(`找出 ${startMs}ms–${endMs}ms 时间段内主线程的耗时操作`),
+            disabled: this.state.isLoading,
+          },
+          '🧵 主线程分析',
+        ),
+        m(
+          'button.sp-action-btn.sp-action-btn--secondary',
+          {
+            onclick: () =>
+              onAction(`分析 ${startMs}ms–${endMs}ms 内的 Binder 调用和锁竞争`),
+            disabled: this.state.isLoading,
+          },
+          '🔗 Binder/锁',
+        ),
       ]),
     ]);
   }
@@ -3351,9 +4146,10 @@ Output MUST follow this exact markdown structure:
 
     if (sel.kind === 'track_event') {
       // Reuse pre-queried sliceCardInfo if it matches current selection (avoids redundant SQL)
-      const cardInfo = this.state.sliceCardInfo?.id === sel.eventId
-        ? this.state.sliceCardInfo
-        : null;
+      const cardInfo =
+        this.state.sliceCardInfo?.id === sel.eventId
+          ? this.state.sliceCardInfo
+          : null;
       const ctx: SelectionContext = {
         kind: 'track_event',
         trackUri: sel.trackUri,
@@ -3368,11 +4164,18 @@ Output MUST follow this exact markdown structure:
         ctx.depth = cardInfo.depth;
         ctx.childCount = cardInfo.childCount;
       }
-      console.log('[AIPanel] captureSelectionContext: track_event captured', ctx);
+      console.log(
+        '[AIPanel] captureSelectionContext: track_event captured',
+        ctx,
+      );
       return ctx;
     }
 
-    console.log('[AIPanel] captureSelectionContext: no selection (kind=' + sel.kind + '), returning null');
+    console.log(
+      '[AIPanel] captureSelectionContext: no selection (kind=' +
+        sel.kind +
+        '), returning null',
+    );
     return null;
   }
 
@@ -3388,7 +4191,7 @@ Output MUST follow this exact markdown structure:
 
     // Collect utid/upid/cpu from track tags
     for (const t of tracks) {
-      const info: SelectionTrackInfo = { uri: t.uri };
+      const info: SelectionTrackInfo = {uri: t.uri};
       if (t.tags?.cpu !== undefined) info.cpu = t.tags.cpu as number;
       if (t.tags?.type) info.kind = t.tags.type as string;
       if (t.tags?.utid !== undefined) utids.add(t.tags.utid as number);
@@ -3399,39 +4202,47 @@ Output MUST follow this exact markdown structure:
     if (!this.engine || (utids.size === 0 && upids.size === 0)) return result;
 
     // Batch query thread names
-    const threadMap = new Map<number, { name: string; tid: number; upid?: number }>();
+    const threadMap = new Map<
+      number,
+      {name: string; tid: number; upid?: number}
+    >();
     if (utids.size > 0) {
       try {
         const q = `SELECT utid, name, tid, upid FROM thread WHERE utid IN (${[...utids].join(',')})`;
         const res = await this.engine.query(q);
         const it = res.iter({});
         while (it.valid()) {
-          threadMap.set(
-            Number(it.get('utid')),
-            { name: String(it.get('name') ?? ''), tid: Number(it.get('tid')), upid: it.get('upid') != null ? Number(it.get('upid')) : undefined },
-          );
+          threadMap.set(Number(it.get('utid')), {
+            name: String(it.get('name') ?? ''),
+            tid: Number(it.get('tid')),
+            upid: it.get('upid') != null ? Number(it.get('upid')) : undefined,
+          });
           // Also collect upids from thread rows for process name resolution
           if (it.get('upid') != null) upids.add(Number(it.get('upid')));
           it.next();
         }
-      } catch { /* non-fatal */ }
+      } catch {
+        /* non-fatal */
+      }
     }
 
     // Batch query process names
-    const processMap = new Map<number, { name: string; pid: number }>();
+    const processMap = new Map<number, {name: string; pid: number}>();
     if (upids.size > 0) {
       try {
         const q = `SELECT upid, name, pid FROM process WHERE upid IN (${[...upids].join(',')})`;
         const res = await this.engine.query(q);
         const it = res.iter({});
         while (it.valid()) {
-          processMap.set(
-            Number(it.get('upid')),
-            { name: String(it.get('name') ?? ''), pid: Number(it.get('pid')) },
-          );
+          processMap.set(Number(it.get('upid')), {
+            name: String(it.get('name') ?? ''),
+            pid: Number(it.get('pid')),
+          });
           it.next();
         }
-      } catch { /* non-fatal */ }
+      } catch {
+        /* non-fatal */
+      }
     }
 
     // Merge resolved names back into result
@@ -3611,7 +4422,8 @@ Output MUST follow this exact markdown structure:
       this.addMessage({
         id: this.generateId(),
         role: 'system',
-        content: '⚠️ **Trace 未连接到 AI 后端**\n\n请确认后端服务已启动，然后点击右上角"重试连接"按钮。`/slow` 命令需要后端支持。',
+        content:
+          '⚠️ **Trace 未连接到 AI 后端**\n\n请确认后端服务已启动，然后点击右上角"重试连接"按钮。`/slow` 命令需要后端支持。',
         timestamp: Date.now(),
       });
       return;
@@ -3625,7 +4437,8 @@ Output MUST follow this exact markdown structure:
       this.addMessage({
         id: this.generateId(),
         role: 'system',
-        content: '⚠️ **Trace 未连接到 AI 后端**\n\n请确认后端服务已启动，然后点击右上角"重试连接"按钮。`/memory` 命令需要后端支持。',
+        content:
+          '⚠️ **Trace 未连接到 AI 后端**\n\n请确认后端服务已启动，然后点击右上角"重试连接"按钮。`/memory` 命令需要后端支持。',
         timestamp: Date.now(),
       });
       return;
@@ -3644,33 +4457,42 @@ Output MUST follow this exact markdown structure:
 
     const sessionId = this.state.agentSessionId;
     try {
-      const response = await this.fetchBackend(buildAssistantApiV1Url(this.state.settings.backendUrl, '/resume'), {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          sessionId,
-          traceId: this.state.backendTraceId,
-        }),
-      });
+      const response = await this.fetchBackend(
+        buildAssistantApiV1Url(this.state.settings.backendUrl, '/resume'),
+        {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            sessionId,
+            traceId: this.state.backendTraceId,
+          }),
+        },
+      );
 
       if (response.ok) {
-        const resumeData = await response.json().catch(() => ({} as any));
+        const resumeData = await response.json().catch(() => ({}) as any);
         const requestIdFromHeader = response.headers.get('x-request-id') || '';
-        if (this.applyAgentObservability({
-          ...resumeData,
-          requestId: resumeData.requestId || requestIdFromHeader,
-        })) {
+        if (
+          this.applyAgentObservability({
+            ...resumeData,
+            requestId: resumeData.requestId || requestIdFromHeader,
+          })
+        ) {
           this.saveCurrentSession();
-          if (DEBUG_AI_PANEL) console.log('[AIPanel] Agent observability updated from resume response:', {
-            runId: this.state.agentRunId,
-            requestId: this.state.agentRequestId,
-            runSequence: this.state.agentRunSequence,
-          });
+          if (DEBUG_AI_PANEL)
+            console.log(
+              '[AIPanel] Agent observability updated from resume response:',
+              {
+                runId: this.state.agentRunId,
+                requestId: this.state.agentRequestId,
+                runSequence: this.state.agentRunSequence,
+              },
+            );
         }
         return;
       }
 
-      const errorData = await response.json().catch(() => ({} as any));
+      const errorData = await response.json().catch(() => ({}) as any);
       const code = String(errorData?.code || '');
       const errorText = String(errorData?.error || '');
 
@@ -3680,11 +4502,14 @@ Output MUST follow this exact markdown structure:
         code === 'TRACE_ID_MISMATCH' ||
         errorText.includes('Session not found')
       ) {
-        console.warn('[AIPanel] Agent session continuity unavailable, falling back to new session:', {
-          sessionId,
-          code,
-          errorText,
-        });
+        console.warn(
+          '[AIPanel] Agent session continuity unavailable, falling back to new session:',
+          {
+            sessionId,
+            code,
+            errorText,
+          },
+        );
         this.state.agentSessionId = null;
         this.clearAgentObservability();
         this.saveCurrentSession();
@@ -3699,55 +4524,73 @@ Output MUST follow this exact markdown structure:
         return;
       }
 
-      throw new Error(`resume failed: ${response.status} ${errorText || response.statusText}`);
+      throw new Error(
+        `resume failed: ${response.status} ${errorText || response.statusText}`,
+      );
     } catch (error) {
-      console.warn('[AIPanel] Failed to ensure Agent session continuity:', error);
+      console.warn(
+        '[AIPanel] Failed to ensure Agent session continuity:',
+        error,
+      );
       // Keep current sessionId in state for potential transient backend failures.
     }
   }
 
   private async tryRecoverMissingSseSession(
-    sessionId: string
+    sessionId: string,
   ): Promise<'restored' | 'notRecoverable' | 'transientError'> {
     if (!this.state.backendTraceId) {
       return 'notRecoverable';
     }
 
     try {
-      this.upsertSseStatusMessage('正在恢复会话：后端可能刚刚重启，正在重新绑定分析上下文。');
+      this.upsertSseStatusMessage(
+        '正在恢复会话：后端可能刚刚重启，正在重新绑定分析上下文。',
+      );
       m.redraw();
 
-      const response = await this.fetchBackend(buildAssistantApiV1Url(this.state.settings.backendUrl, '/resume'), {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          sessionId,
-          traceId: this.state.backendTraceId,
-        }),
-      });
+      const response = await this.fetchBackend(
+        buildAssistantApiV1Url(this.state.settings.backendUrl, '/resume'),
+        {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            sessionId,
+            traceId: this.state.backendTraceId,
+          }),
+        },
+      );
 
       if (response.ok) {
-        const resumeData = await response.json().catch(() => ({} as any));
+        const resumeData = await response.json().catch(() => ({}) as any);
         const requestIdFromHeader = response.headers.get('x-request-id') || '';
         this.state.agentSessionId = sessionId;
         this.state.sseLastEventId = null;
-        if (this.applyAgentObservability({
-          ...resumeData,
-          requestId: resumeData.requestId || requestIdFromHeader,
-        })) {
-          if (DEBUG_AI_PANEL) console.log('[AIPanel] Agent observability updated from SSE resume:', {
-            runId: this.state.agentRunId,
-            requestId: this.state.agentRequestId,
-            runSequence: this.state.agentRunSequence,
-          });
+        if (
+          this.applyAgentObservability({
+            ...resumeData,
+            requestId: resumeData.requestId || requestIdFromHeader,
+          })
+        ) {
+          if (DEBUG_AI_PANEL)
+            console.log(
+              '[AIPanel] Agent observability updated from SSE resume:',
+              {
+                runId: this.state.agentRunId,
+                requestId: this.state.agentRequestId,
+                runSequence: this.state.agentRunSequence,
+              },
+            );
         }
-        this.upsertSseStatusMessage('后端已重启，已恢复会话，正在重新连接结果流。');
+        this.upsertSseStatusMessage(
+          '后端已重启，已恢复会话，正在重新连接结果流。',
+        );
         this.saveCurrentSession();
         m.redraw();
         return 'restored';
       }
 
-      const errorData = await response.json().catch(() => ({} as any));
+      const errorData = await response.json().catch(() => ({}) as any);
       const code = String(errorData?.code || '');
       const errorText = String(errorData?.error || '');
       if (
@@ -3761,9 +4604,10 @@ Output MUST follow this exact markdown structure:
         this.state.sseConnectionState = 'disconnected';
         this.clearAgentObservability();
         this.setLoadingState(false);
-        const content = code === 'TRACE_NOT_UPLOADED'
-          ? '后端已重启，当前 Trace 需要重新连接。请点击右上角“重试连接”重新上传 Trace 后再分析。'
-          : '后端已重启，当前分析会话无法恢复。本次流式分析已停止，请重新发起分析。';
+        const content =
+          code === 'TRACE_NOT_UPLOADED'
+            ? '后端已重启，当前 Trace 需要重新连接。请点击右上角“重试连接”重新上传 Trace 后再分析。'
+            : '后端已重启，当前分析会话无法恢复。本次流式分析已停止，请重新发起分析。';
         this.upsertSseStatusMessage(content);
         this.saveCurrentSession();
         m.redraw();
@@ -3783,28 +4627,36 @@ Output MUST follow this exact markdown structure:
   }
 
   private async handleChatMessage(message: string) {
-    if (DEBUG_AI_PANEL) console.log('[AIPanel] handleChatMessage called with:', message);
-    if (DEBUG_AI_PANEL) console.log('[AIPanel] backendTraceId:', this.state.backendTraceId);
+    if (DEBUG_AI_PANEL)
+      console.log('[AIPanel] handleChatMessage called with:', message);
+    if (DEBUG_AI_PANEL)
+      console.log('[AIPanel] backendTraceId:', this.state.backendTraceId);
 
     // Check if trace is uploaded to backend
     if (!this.state.backendTraceId) {
       this.addMessage({
         id: this.generateId(),
         role: 'system',
-        content: '⚠️ **Trace 未连接到 AI 后端**\n\n请确认后端服务已启动，然后点击右上角"重试连接"按钮。后端将执行 SQL 查询并提供详细分析。',
+        content:
+          '⚠️ **Trace 未连接到 AI 后端**\n\n请确认后端服务已启动，然后点击右上角"重试连接"按钮。后端将执行 SQL 查询并提供详细分析。',
         timestamp: Date.now(),
       });
       return;
     }
 
     this.setLoadingState(true);
-    this.state.completionHandled = false;  // Reset completion flag for new analysis
-    this.state.displayedSkillProgress.clear();  // Clear progress tracking for new analysis
-    this.state.collectedErrors = [];  // Clear error collection for new analysis
-    this.resetStreamingFlow();  // Reset progressive transcript for new analysis turn
-    this.resetStreamingAnswer();  // Reset incremental answer stream for new analysis turn
+    this.state.completionHandled = false; // Reset completion flag for new analysis
+    this.state.displayedSkillProgress.clear(); // Clear progress tracking for new analysis
+    this.state.collectedErrors = []; // Clear error collection for new analysis
+    this.resetStreamingFlow(); // Reset progressive transcript for new analysis turn
+    this.resetStreamingAnswer(); // Reset incremental answer stream for new analysis turn
     // AI Everywhere: update cross-component state + clear old timeline notes
-    updateAISharedState({status: 'analyzing', findings: [], currentPhase: '', issueCount: 0});
+    updateAISharedState({
+      status: 'analyzing',
+      findings: [],
+      currentPhase: '',
+      issueCount: 0,
+    });
     if (this.trace) clearAIFindingNotes(this.trace);
     m.redraw();
 
@@ -3813,16 +4665,25 @@ Output MUST follow this exact markdown structure:
       await this.ensureAgentSessionReady();
 
       // Call Agent API (Agent-Driven Orchestrator)
-      const apiUrl = buildAssistantApiV1Url(this.state.settings.backendUrl, '/analyze');
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Calling Agent API:', apiUrl, 'with traceId:', this.state.backendTraceId);
+      const apiUrl = buildAssistantApiV1Url(
+        this.state.settings.backendUrl,
+        '/analyze',
+      );
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] Calling Agent API:',
+          apiUrl,
+          'with traceId:',
+          this.state.backendTraceId,
+        );
 
       // Build request body, include sessionId for multi-turn dialogue
       const requestBody: Record<string, any> = {
         query: message,
         traceId: this.state.backendTraceId,
         options: {
-          maxRounds: 3,  // Reduced to avoid unnecessary iterations
-          confidenceThreshold: 0.5,  // Match backend default
+          maxRounds: 3, // Reduced to avoid unnecessary iterations
+          confidenceThreshold: 0.5, // Match backend default
           maxNoProgressRounds: 2,
           maxFailureRounds: 2,
           analysisMode: this.state.analysisMode,
@@ -3838,7 +4699,11 @@ Output MUST follow this exact markdown structure:
       const selectionContext = await this.captureSelectionContext();
       if (selectionContext) {
         requestBody.selectionContext = selectionContext;
-        if (DEBUG_AI_PANEL) console.log('[AIPanel] Injecting selectionContext:', selectionContext);
+        if (DEBUG_AI_PANEL)
+          console.log(
+            '[AIPanel] Injecting selectionContext:',
+            selectionContext,
+          );
       }
 
       // Attach pre-queried trace data (set by quick-action buttons) and consume it
@@ -3850,24 +4715,33 @@ Output MUST follow this exact markdown structure:
       // Include agentSessionId if available for multi-turn dialogue
       if (this.state.agentSessionId) {
         requestBody.sessionId = this.state.agentSessionId;
-        if (DEBUG_AI_PANEL) console.log('[AIPanel] Reusing Agent session for multi-turn dialogue:', this.state.agentSessionId);
+        if (DEBUG_AI_PANEL)
+          console.log(
+            '[AIPanel] Reusing Agent session for multi-turn dialogue:',
+            this.state.agentSessionId,
+          );
       }
 
       const response = await this.fetchBackend(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(requestBody),
       });
 
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Agent API response status:', response.status);
+      if (DEBUG_AI_PANEL)
+        console.log('[AIPanel] Agent API response status:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        if (errorData.code === 'TRACE_NOT_UPLOADED' || errorData.error?.includes('not found')) {
+        if (
+          errorData.code === 'TRACE_NOT_UPLOADED' ||
+          errorData.error?.includes('not found')
+        ) {
           this.addMessage({
             id: this.generateId(),
             role: 'system',
-            content: '⚠️ **后端未找到该 Trace**\n\nTrace 可能已过期。请点击右上角"重试连接"按钮重新上传。',
+            content:
+              '⚠️ **后端未找到该 Trace**\n\nTrace 可能已过期。请点击右上角"重试连接"按钮重新上传。',
             timestamp: Date.now(),
           });
           this.state.backendTraceId = null;
@@ -3875,13 +4749,16 @@ Output MUST follow this exact markdown structure:
           this.state.agentSessionId = null;
           this.clearAgentObservability();
           // Note: Don't return early - let finally block handle cleanup
-          throw new Error('TRACE_NOT_FOUND');  // Will be caught and cleanup will run
+          throw new Error('TRACE_NOT_FOUND'); // Will be caught and cleanup will run
         }
-        throw new Error(`API error: ${response.status} ${errorData.error || response.statusText}`);
+        throw new Error(
+          `API error: ${response.status} ${errorData.error || response.statusText}`,
+        );
       }
 
       const data = await response.json();
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Agent API response data:', data);
+      if (DEBUG_AI_PANEL)
+        console.log('[AIPanel] Agent API response data:', data);
 
       if (!data.success) {
         throw new Error(data.error || 'Analysis failed');
@@ -3893,11 +4770,15 @@ Output MUST follow this exact markdown structure:
         requestId: data.requestId || requestIdFromHeader,
       });
       if (observabilityUpdated) {
-        if (DEBUG_AI_PANEL) console.log('[AIPanel] Agent observability updated from analyze response:', {
-          runId: this.state.agentRunId,
-          requestId: this.state.agentRequestId,
-          runSequence: this.state.agentRunSequence,
-        });
+        if (DEBUG_AI_PANEL)
+          console.log(
+            '[AIPanel] Agent observability updated from analyze response:',
+            {
+              runId: this.state.agentRunId,
+              requestId: this.state.agentRequestId,
+              runSequence: this.state.agentRunSequence,
+            },
+          );
       }
 
       // Use SSE for real-time progress updates
@@ -3907,19 +4788,31 @@ Output MUST follow this exact markdown structure:
         // Only save if this is a new session or reusing existing session
         const isNewSession = data.isNewSession !== false;
         if (isNewSession) {
-          if (DEBUG_AI_PANEL) console.log('[AIPanel] Saving new Agent session for multi-turn dialogue:', sessionId);
+          if (DEBUG_AI_PANEL)
+            console.log(
+              '[AIPanel] Saving new Agent session for multi-turn dialogue:',
+              sessionId,
+            );
         } else {
-          if (DEBUG_AI_PANEL) console.log('[AIPanel] Continuing existing Agent session:', sessionId);
+          if (DEBUG_AI_PANEL)
+            console.log(
+              '[AIPanel] Continuing existing Agent session:',
+              sessionId,
+            );
         }
         this.state.agentSessionId = sessionId;
         this.saveCurrentSession();
 
-        if (DEBUG_AI_PANEL) console.log('[AIPanel] Starting Agent SSE listener for session:', sessionId);
+        if (DEBUG_AI_PANEL)
+          console.log(
+            '[AIPanel] Starting Agent SSE listener for session:',
+            sessionId,
+          );
         await this.listenToAgentSSE(sessionId);
       } else {
-        if (DEBUG_AI_PANEL) console.log('[AIPanel] No sessionId in response, data:', data);
+        if (DEBUG_AI_PANEL)
+          console.log('[AIPanel] No sessionId in response, data:', data);
       }
-
     } catch (e: any) {
       // Don't show duplicate error message for TRACE_NOT_FOUND (already shown above)
       if (e.message !== 'TRACE_NOT_FOUND') {
@@ -4014,7 +4907,10 @@ Output MUST follow this exact markdown structure:
     sessionId: string,
     resumeFromLastEventId: boolean = false,
   ): Promise<void> {
-    const baseApiUrl = buildAssistantApiV1Url(this.state.settings.backendUrl, `/${sessionId}/stream`);
+    const baseApiUrl = buildAssistantApiV1Url(
+      this.state.settings.backendUrl,
+      `/${sessionId}/stream`,
+    );
 
     // Cancel any existing connection
     this.cancelSSEConnection();
@@ -4027,7 +4923,7 @@ Output MUST follow this exact markdown structure:
     this.state.sseConnectionState = 'connecting';
     this.state.sseRetryCount = 0;
     if (!resumeFromLastEventId) {
-      this.state.sseLastEventId = null;  // Reset for fresh connection; preserved across reconnects
+      this.state.sseLastEventId = null; // Reset for fresh connection; preserved across reconnects
     }
     m.redraw();
 
@@ -4042,11 +4938,12 @@ Output MUST follow this exact markdown structure:
         }
 
         // F3: Append lastEventId query param on reconnect for event replay
-        const apiUrl = this.state.sseLastEventId !== null
-          ? `${baseApiUrl}${baseApiUrl.includes('?') ? '&' : '?'}lastEventId=${this.state.sseLastEventId}`
-          : baseApiUrl;
+        const apiUrl =
+          this.state.sseLastEventId !== null
+            ? `${baseApiUrl}${baseApiUrl.includes('?') ? '&' : '?'}lastEventId=${this.state.sseLastEventId}`
+            : baseApiUrl;
 
-        const response = await this.fetchBackend(apiUrl, { signal });
+        const response = await this.fetchBackend(apiUrl, {signal});
         if (!response.ok) {
           if (response.status === 404 && !attemptedSessionRecovery) {
             attemptedSessionRecovery = true;
@@ -4061,14 +4958,20 @@ Output MUST follow this exact markdown structure:
 
           // P2-2: 4xx errors are not transient (bad request, not found, etc.) — don't retry
           if (response.status >= 400 && response.status < 500) {
-            console.error(`[AIPanel] SSE got ${response.status} — not retryable, giving up`);
+            console.error(
+              `[AIPanel] SSE got ${response.status} — not retryable, giving up`,
+            );
             this.state.sseConnectionState = 'disconnected';
             this.setLoadingState(false);
-            this.upsertSseStatusMessage(`后端连接失败：${response.status} ${response.statusText}`);
+            this.upsertSseStatusMessage(
+              `后端连接失败：${response.status} ${response.statusText}`,
+            );
             m.redraw();
             return;
           }
-          throw new Error(`Agent SSE connection failed: ${response.statusText}`);
+          throw new Error(
+            `Agent SSE connection failed: ${response.statusText}`,
+          );
         }
 
         const reader = response.body?.getReader();
@@ -4100,7 +5003,8 @@ Output MUST follow this exact markdown structure:
 
           const {done, value} = await reader.read();
           if (done) {
-            if (DEBUG_AI_PANEL) console.log('[AIPanel] SSE stream ended normally');
+            if (DEBUG_AI_PANEL)
+              console.log('[AIPanel] SSE stream ended normally');
             reader.releaseLock();
             // Stream ended normally (server closed), no need to reconnect
             this.state.sseConnectionState = 'disconnected';
@@ -4135,26 +5039,39 @@ Output MUST follow this exact markdown structure:
                   const data = JSON.parse(dataStr);
                   const eventType = currentEventType || data.type;
                   if (!eventType) {
-                    console.warn('[AIPanel] SSE event with no type, skipping:', Object.keys(data));
+                    console.warn(
+                      '[AIPanel] SSE event with no type, skipping:',
+                      Object.keys(data),
+                    );
                   } else {
-                    const observabilityUpdated = this.applyAgentObservability(data);
+                    const observabilityUpdated =
+                      this.applyAgentObservability(data);
                     if (observabilityUpdated) {
                       this.saveCurrentSession();
-                      if (DEBUG_AI_PANEL) console.log('[AIPanel] Agent observability updated from SSE:', {
-                        eventType,
-                        runId: this.state.agentRunId,
-                        requestId: this.state.agentRequestId,
-                        runSequence: this.state.agentRunSequence,
-                      });
+                      if (DEBUG_AI_PANEL)
+                        console.log(
+                          '[AIPanel] Agent observability updated from SSE:',
+                          {
+                            eventType,
+                            runId: this.state.agentRunId,
+                            requestId: this.state.agentRequestId,
+                            runSequence: this.state.agentRunSequence,
+                          },
+                        );
                     }
-                    if (DEBUG_AI_PANEL) console.log('[AIPanel] Agent SSE event:', eventType);
+                    if (DEBUG_AI_PANEL)
+                      console.log('[AIPanel] Agent SSE event:', eventType);
                     this.handleSSEEvent(eventType, data);
 
                     // Check for terminal events (no need to reconnect after these)
                     // 'conclusion' from agentv3 is near-terminal (answer done) but
                     // 'analysis_completed' follows with reportUrl after HTML report
                     // generation. Only close on analysis_completed/error/end.
-                    if (eventType === 'analysis_completed' || eventType === 'error' || eventType === 'end') {
+                    if (
+                      eventType === 'analysis_completed' ||
+                      eventType === 'error' ||
+                      eventType === 'end'
+                    ) {
                       this.flushSessionSave();
                       this.cancelSSEConnection();
                       m.redraw();
@@ -4162,7 +5079,11 @@ Output MUST follow this exact markdown structure:
                     }
                   }
                 } catch (e) {
-                  console.error('[AIPanel] Failed to parse Agent SSE data:', e, dataStr.substring(0, 200));
+                  console.error(
+                    '[AIPanel] Failed to parse Agent SSE data:',
+                    e,
+                    dataStr.substring(0, 200),
+                  );
                 }
               }
               currentEventType = '';
@@ -4172,12 +5093,18 @@ Output MUST follow this exact markdown structure:
       } catch (e: any) {
         // Check if this was an intentional abort
         if (signal.aborted || e.name === 'AbortError') {
-          if (DEBUG_AI_PANEL) console.log('[AIPanel] SSE connection intentionally aborted');
+          if (DEBUG_AI_PANEL)
+            console.log('[AIPanel] SSE connection intentionally aborted');
           this.state.sseConnectionState = 'disconnected';
           return;
         }
 
-        console.error('[AIPanel] Agent SSE error (attempt', this.state.sseRetryCount + 1, '):', e);
+        console.error(
+          '[AIPanel] Agent SSE error (attempt',
+          this.state.sseRetryCount + 1,
+          '):',
+          e,
+        );
 
         // Check if we have retries left
         if (this.state.sseRetryCount >= this.state.sseMaxRetries) {
@@ -4186,7 +5113,7 @@ Output MUST follow this exact markdown structure:
           this.state.sseConnectionState = 'disconnected';
           this.setLoadingState(false);
           this.upsertSseStatusMessage(
-            `后端连接失败：${e.message || 'Agent 后端连接中断'}\n\n已重试 ${this.state.sseMaxRetries} 次，请重新发起分析。`
+            `后端连接失败：${e.message || 'Agent 后端连接中断'}\n\n已重试 ${this.state.sseMaxRetries} 次，请重新发起分析。`,
           );
           m.redraw();
           return;
@@ -4196,11 +5123,14 @@ Output MUST follow this exact markdown structure:
         this.state.sseRetryCount++;
         this.state.sseConnectionState = 'reconnecting';
         const delay = this.calculateBackoffDelay(this.state.sseRetryCount - 1);
-        if (DEBUG_AI_PANEL) console.log(`[AIPanel] SSE reconnecting in ${delay}ms (attempt ${this.state.sseRetryCount}/${this.state.sseMaxRetries})`);
+        if (DEBUG_AI_PANEL)
+          console.log(
+            `[AIPanel] SSE reconnecting in ${delay}ms (attempt ${this.state.sseRetryCount}/${this.state.sseMaxRetries})`,
+          );
 
         // Update UI to show reconnecting status
         this.upsertSseStatusMessage(
-          `连接中断，正在重连...（第 ${this.state.sseRetryCount}/${this.state.sseMaxRetries} 次）`
+          `连接中断，正在重连...（第 ${this.state.sseRetryCount}/${this.state.sseMaxRetries} 次）`,
         );
         m.redraw();
 
@@ -4212,7 +5142,7 @@ Output MUST follow this exact markdown structure:
             clearTimeout(timeoutId);
             resolve();
           };
-          signal.addEventListener('abort', abortHandler, { once: true });
+          signal.addEventListener('abort', abortHandler, {once: true});
         });
 
         if (signal.aborted) {
@@ -4233,7 +5163,10 @@ Output MUST follow this exact markdown structure:
    * If analysis already completed/failed during disconnect, finalize the UI.
    * Returns true if the session is terminal (no need to reconnect).
    */
-  private async checkSessionStatus(sessionId: string, signal: AbortSignal): Promise<boolean> {
+  private async checkSessionStatus(
+    sessionId: string,
+    signal: AbortSignal,
+  ): Promise<boolean> {
     try {
       const statusUrl = buildAssistantApiV1Url(
         this.state.settings.backendUrl,
@@ -4244,12 +5177,20 @@ Output MUST follow this exact markdown structure:
       const body = await res.json();
       const status = body.status || body.state;
       if (status === 'completed' || status === 'failed') {
-        if (DEBUG_AI_PANEL) console.log('[AIPanel] Session already', status, '— stopping SSE reconnect');
+        if (DEBUG_AI_PANEL)
+          console.log(
+            '[AIPanel] Session already',
+            status,
+            '— stopping SSE reconnect',
+          );
         this.state.sseConnectionState = 'disconnected';
         this.setLoadingState(false);
         // Remove reconnecting indicator if present
         const lastMsg = this.state.messages[this.state.messages.length - 1];
-        if (lastMsg?.role === 'assistant' && lastMsg.content.startsWith('\u{1F504}')) {
+        if (
+          lastMsg?.role === 'assistant' &&
+          lastMsg.content.startsWith('\u{1F504}')
+        ) {
           this.state.messages.pop();
         }
         if (status === 'failed') {
@@ -4270,7 +5211,6 @@ Output MUST follow this exact markdown structure:
     return false;
   }
 
-
   /**
    * Handle /teaching-pipeline command
    * Detects the rendering pipeline type and shows educational content
@@ -4289,23 +5229,39 @@ Output MUST follow this exact markdown structure:
     this.setLoadingState(true);
     m.redraw();
 
-    if (DEBUG_AI_PANEL) console.log('[AIPanel] Teaching pipeline request with traceId:', this.state.backendTraceId);
+    if (DEBUG_AI_PANEL)
+      console.log(
+        '[AIPanel] Teaching pipeline request with traceId:',
+        this.state.backendTraceId,
+      );
 
     try {
-      const response = await this.fetchBackend(buildAssistantApiV1Url(this.state.settings.backendUrl, '/teaching/pipeline'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          traceId: this.state.backendTraceId,
-        }),
-      });
+      const response = await this.fetchBackend(
+        buildAssistantApiV1Url(
+          this.state.settings.backendUrl,
+          '/teaching/pipeline',
+        ),
+        {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            traceId: this.state.backendTraceId,
+          }),
+        },
+      );
 
       if (!response.ok) {
         // Try to parse error details from response body
         try {
           const errorData = await response.json();
-          console.error('[AIPanel] Teaching pipeline error response:', errorData);
-          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+          console.error(
+            '[AIPanel] Teaching pipeline error response:',
+            errorData,
+          );
+          throw new Error(
+            errorData.error ||
+              `HTTP ${response.status}: ${response.statusText}`,
+          );
         } catch (parseErr) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -4325,7 +5281,9 @@ Output MUST follow this exact markdown structure:
 
       // Format pipeline type with confidence
       const pipelineType = detection.primary_pipeline.id;
-      const confidence = (detection.primary_pipeline.confidence * 100).toFixed(0);
+      const confidence = (detection.primary_pipeline.confidence * 100).toFixed(
+        0,
+      );
 
       // Build message content
       let content = `## 🎓 渲染管线教学\n\n`;
@@ -4334,16 +5292,28 @@ Output MUST follow this exact markdown structure:
 
       // Show subvariants if relevant
       const subvariants = detection.subvariants;
-      if (subvariants.buffer_mode !== 'UNKNOWN' && subvariants.buffer_mode !== 'N/A') {
+      if (
+        subvariants.buffer_mode !== 'UNKNOWN' &&
+        subvariants.buffer_mode !== 'N/A'
+      ) {
         content += `- **Buffer 模式**: ${subvariants.buffer_mode}\n`;
       }
-      if (subvariants.flutter_engine !== 'UNKNOWN' && subvariants.flutter_engine !== 'N/A') {
+      if (
+        subvariants.flutter_engine !== 'UNKNOWN' &&
+        subvariants.flutter_engine !== 'N/A'
+      ) {
         content += `- **Flutter 引擎**: ${subvariants.flutter_engine}\n`;
       }
-      if (subvariants.webview_mode !== 'UNKNOWN' && subvariants.webview_mode !== 'N/A') {
+      if (
+        subvariants.webview_mode !== 'UNKNOWN' &&
+        subvariants.webview_mode !== 'N/A'
+      ) {
         content += `- **WebView 模式**: ${subvariants.webview_mode}\n`;
       }
-      if (subvariants.game_engine !== 'UNKNOWN' && subvariants.game_engine !== 'N/A') {
+      if (
+        subvariants.game_engine !== 'UNKNOWN' &&
+        subvariants.game_engine !== 'N/A'
+      ) {
         content += `- **游戏引擎**: ${subvariants.game_engine}\n`;
       }
 
@@ -4352,7 +5322,10 @@ Output MUST follow this exact markdown structure:
         content += `\n**候选类型**: `;
         content += detection.candidates
           .slice(0, 3)
-          .map((c: {id: string; confidence: number}) => `${c.id} (${(c.confidence * 100).toFixed(0)}%)`)
+          .map(
+            (c: {id: string; confidence: number}) =>
+              `${c.id} (${(c.confidence * 100).toFixed(0)}%)`,
+          )
           .join(', ');
         content += `\n`;
       }
@@ -4371,7 +5344,10 @@ Output MUST follow this exact markdown structure:
         content += `\n**活跃渲染进程**: `;
         content += activeRenderingProcesses
           .slice(0, 5) // Show top 5
-          .map((p: {processName: string; frameCount: number}) => `${p.processName} (${p.frameCount} 帧)`)
+          .map(
+            (p: {processName: string; frameCount: number}) =>
+              `${p.processName} (${p.frameCount} 帧)`,
+          )
           .join(', ');
         if (activeRenderingProcesses.length > 5) {
           content += ` 等 ${activeRenderingProcesses.length} 个进程`;
@@ -4411,7 +5387,10 @@ Output MUST follow this exact markdown structure:
       }
 
       // Trace requirements warning
-      if (detection.trace_requirements_missing && detection.trace_requirements_missing.length > 0) {
+      if (
+        detection.trace_requirements_missing &&
+        detection.trace_requirements_missing.length > 0
+      ) {
         content += `\n⚠️ **采集建议**:\n`;
         for (const hint of detection.trace_requirements_missing) {
           content += `- ${hint}\n`;
@@ -4428,9 +5407,11 @@ Output MUST follow this exact markdown structure:
 
       // Auto-pin relevant tracks with v3 smart pinning
       if (pinInstructions.length > 0 && this.trace) {
-        await this.pinTracksFromInstructions(pinInstructions, activeRenderingProcesses);
+        await this.pinTracksFromInstructions(
+          pinInstructions,
+          activeRenderingProcesses,
+        );
       }
-
     } catch (error: any) {
       console.error('[AIPanel] Teaching pipeline error:', error);
       this.addMessage({
@@ -4517,19 +5498,24 @@ Output MUST follow this exact markdown structure:
 
           // Sync detected scenes for the navigation bar.
           if (Array.isArray(report.displayedScenes)) {
-            this.state.detectedScenes = report.displayedScenes.map((s: any) => ({
-              type: s.sceneType,
-              startTs: s.startTs,
-              endTs: s.endTs,
-              durationMs: s.durationMs,
-              appPackage: s.processName,
-              metadata: s.metadata,
-            }));
+            this.state.detectedScenes = report.displayedScenes.map(
+              (s: any) => ({
+                type: s.sceneType,
+                startTs: s.startTs,
+                endTs: s.endTs,
+                durationMs: s.durationMs,
+                appPackage: s.processName,
+                metadata: s.metadata,
+              }),
+            );
           }
         } catch (loadErr: any) {
           // Cached report failed to load (expired between preview and load?).
           // Degrade to cold path so the user can still run fresh.
-          console.warn('[AIPanel] Cached report load failed, falling back to cold path:', loadErr);
+          console.warn(
+            '[AIPanel] Cached report load failed, falling back to cold path:',
+            loadErr,
+          );
           this.state.storyState.status = 'preview_cold';
         }
       } else {
@@ -4557,7 +5543,8 @@ Output MUST follow this exact markdown structure:
       this.state.storyState.status = 'completed';
     } catch (err: any) {
       this.state.storyState.status = 'failed';
-      this.state.storyState.lastError = err?.message ?? 'Scene reconstruction failed';
+      this.state.storyState.lastError =
+        err?.message ?? 'Scene reconstruction failed';
     }
     m.redraw();
   }
@@ -4570,8 +5557,10 @@ Output MUST follow this exact markdown structure:
     if (!analysisId) return;
     try {
       await this.fetchBackend(
-        buildAssistantApiV1Url(this.state.settings.backendUrl,
-          `/scene-reconstruct/${analysisId}/cancel`),
+        buildAssistantApiV1Url(
+          this.state.settings.backendUrl,
+          `/scene-reconstruct/${analysisId}/cancel`,
+        ),
         {method: 'POST'},
       );
     } catch (e) {
@@ -4611,22 +5600,31 @@ Output MUST follow this exact markdown structure:
 
     return m('div.ai-story-body', [
       m('h2', {style: 'margin: 0 0 8px 0;'}, '🎬 场景还原'),
-      m('p', {style: 'color: var(--chat-text-secondary); margin: 0 0 16px 0;'},
-        '从 Trace 中自动检测用户操作场景并分析性能问题。'),
+      m(
+        'p',
+        {style: 'color: var(--chat-text-secondary); margin: 0 0 16px 0;'},
+        '从 Trace 中自动检测用户操作场景并分析性能问题。',
+      ),
 
       !hasTrace
-        ? m('div.ai-story-card.ai-story-card--warn',
-            '⚠ 请先把 Trace 上传到后端(打开文件后自动完成)')
+        ? m(
+            'div.ai-story-card.ai-story-card--warn',
+            '⚠ 请先把 Trace 上传到后端(打开文件后自动完成)',
+          )
         : null,
 
       s.status === 'previewing'
-        ? m('div.ai-story-card.ai-story-card--info',
-            '⏳ 正在检查缓存与估算成本...')
+        ? m(
+            'div.ai-story-card.ai-story-card--info',
+            '⏳ 正在检查缓存与估算成本...',
+          )
         : null,
 
       s.status === 'preview_cached'
-        ? m('div.ai-story-card.ai-story-card--success',
-            '✅ 发现历史缓存报告,正在加载...')
+        ? m(
+            'div.ai-story-card.ai-story-card--success',
+            '✅ 发现历史缓存报告,正在加载...',
+          )
         : null,
 
       // Preview: cold path — show estimate + confirm button.
@@ -4635,25 +5633,39 @@ Output MUST follow this exact markdown structure:
             m('div.ai-story-cold-preview-title', '预估分析成本'),
             m('div.ai-story-cold-preview-metrics', [
               this.renderEstimateMetric(
-                `${s.preview.estimate.expectedScenes}`, '预估场景数'),
+                `${s.preview.estimate.expectedScenes}`,
+                '预估场景数',
+              ),
               this.renderEstimateMetric(
-                `~${s.preview.estimate.etaSec}s`, '预估耗时'),
+                `~${s.preview.estimate.etaSec}s`,
+                '预估耗时',
+              ),
               this.renderEstimateMetric(
-                `$${s.preview.estimate.estimatedUsd}`, '预估费用'),
+                `$${s.preview.estimate.estimatedUsd}`,
+                '预估费用',
+              ),
             ]),
             s.preview.estimate.confidence === 'low'
               ? m('div.ai-story-hint', '* 预估基于启发式公式,实际可能有所偏差')
               : null,
             m('div.ai-story-cold-preview-actions', [
-              m('button.ai-story-btn-primary', {
-                onclick: () => this.handleStoryConfirm(),
-              }, '▶ 开始分析'),
-              m('button.ai-story-btn-secondary', {
-                onclick: () => {
-                  this.state.storyState = createStoryPanelState();
-                  m.redraw();
+              m(
+                'button.ai-story-btn-primary',
+                {
+                  onclick: () => this.handleStoryConfirm(),
                 },
-              }, '取消'),
+                '▶ 开始分析',
+              ),
+              m(
+                'button.ai-story-btn-secondary',
+                {
+                  onclick: () => {
+                    this.state.storyState = createStoryPanelState();
+                    m.redraw();
+                  },
+                },
+                '取消',
+              ),
             ]),
           ])
         : null,
@@ -4661,11 +5673,18 @@ Output MUST follow this exact markdown structure:
       s.status === 'running'
         ? m('div.ai-story-card.ai-story-card--info', [
             m('div', {style: 'margin-bottom: 8px;'}, '🎬 场景还原进行中...'),
-            m('div', {style: 'font-size: 13px; color: var(--chat-text-secondary);'},
-              '进度消息同步显示在 Chat 视图中。'),
-            m('button.ai-story-btn-ghost-danger', {
-              onclick: () => this.handleStoryCancel(),
-            }, '取消分析'),
+            m(
+              'div',
+              {style: 'font-size: 13px; color: var(--chat-text-secondary);'},
+              '进度消息同步显示在 Chat 视图中。',
+            ),
+            m(
+              'button.ai-story-btn-ghost-danger',
+              {
+                onclick: () => this.handleStoryCancel(),
+              },
+              '取消分析',
+            ),
           ])
         : null,
 
@@ -4674,9 +5693,13 @@ Output MUST follow this exact markdown structure:
       s.status === 'failed'
         ? m('div.ai-story-card.ai-story-card--error', [
             m('div', `❌ ${s.lastError || '场景还原失败'}`),
-            m('button.ai-story-btn-retry', {
-              onclick: () => this.handleStoryPreview(),
-            }, '重试'),
+            m(
+              'button.ai-story-btn-retry',
+              {
+                onclick: () => this.handleStoryPreview(),
+              },
+              '重试',
+            ),
           ])
         : null,
     ]);
@@ -4701,15 +5724,30 @@ Output MUST follow this exact markdown structure:
       m('div.ai-story-card.ai-story-card--success', [
         report
           ? m('div', [
-              m('div', {style: 'font-weight: 600; margin-bottom: 4px;'},
-                `✅ 场景还原完成 — ${scenes.length} 个场景`),
+              m(
+                'div',
+                {style: 'font-weight: 600; margin-bottom: 4px;'},
+                `✅ 场景还原完成 — ${scenes.length} 个场景`,
+              ),
               report.summary
-                ? m('div', {style: 'margin-top: 8px; font-size: 14px; line-height: 1.6;'},
-                    report.summary)
+                ? m(
+                    'div',
+                    {
+                      style:
+                        'margin-top: 8px; font-size: 14px; line-height: 1.6;',
+                    },
+                    report.summary,
+                  )
                 : null,
               report.cachePolicy === 'disk_7d'
-                ? m('div', {style: 'margin-top: 8px; font-size: 12px; color: var(--chat-text-secondary);'},
-                    `来自缓存 (${new Date(report.createdAt).toLocaleString()})`)
+                ? m(
+                    'div',
+                    {
+                      style:
+                        'margin-top: 8px; font-size: 12px; color: var(--chat-text-secondary);',
+                    },
+                    `来自缓存 (${new Date(report.createdAt).toLocaleString()})`,
+                  )
                 : null,
             ])
           : '✅ 场景还原完成。切换到 Chat 视图查看完整结果。',
@@ -4718,46 +5756,77 @@ Output MUST follow this exact markdown structure:
       scenes.length > 0
         ? m('div.ai-story-scenes-table', [
             m('table', [
-              m('thead',
-                m('tr', ['#', '类型', '时长', '应用/进程', '状态'].map(h => m('th', h))),
+              m(
+                'thead',
+                m(
+                  'tr',
+                  ['#', '类型', '时长', '应用/进程', '状态'].map((h) =>
+                    m('th', h),
+                  ),
+                ),
               ),
-              m('tbody', scenes.map((scene: any, i: number) => {
-                const displayName = SCENE_DISPLAY_NAMES[scene.sceneType] ?? scene.sceneType;
-                const dur = scene.durationMs >= 1000
-                  ? `${(scene.durationMs / 1000).toFixed(2)}s`
-                  : `${Math.round(scene.durationMs)}ms`;
-                const severity = scene.severity === 'bad' ? '🔴'
-                  : scene.severity === 'warning' ? '🟡'
-                  : scene.severity === 'good' ? '🟢' : '⚪';
-                const stateClass = scene.analysisState === 'completed' ? 'ai-story-scene-state--completed'
-                  : scene.analysisState === 'failed' ? 'ai-story-scene-state--failed'
-                  : 'ai-story-scene-state--pending';
-                return m('tr', {
-                  key: scene.id,
-                  title: `点击跳转到 ${scene.startTs}`,
-                }, [
-                  m('td.col-index', `${i + 1}`),
-                  m('td.col-type', `${severity} ${displayName}`),
-                  m('td.col-duration', dur),
-                  m('td.col-process', scene.processName ?? '-'),
-                  m('td',
-                    m(`span.ai-story-scene-state.${stateClass}`,
-                      scene.analysisState ?? 'not_planned')),
-                ]);
-              })),
+              m(
+                'tbody',
+                scenes.map((scene: any, i: number) => {
+                  const displayName =
+                    SCENE_DISPLAY_NAMES[scene.sceneType] ?? scene.sceneType;
+                  const dur =
+                    scene.durationMs >= 1000
+                      ? `${(scene.durationMs / 1000).toFixed(2)}s`
+                      : `${Math.round(scene.durationMs)}ms`;
+                  const severity =
+                    scene.severity === 'bad'
+                      ? '🔴'
+                      : scene.severity === 'warning'
+                        ? '🟡'
+                        : scene.severity === 'good'
+                          ? '🟢'
+                          : '⚪';
+                  const stateClass =
+                    scene.analysisState === 'completed'
+                      ? 'ai-story-scene-state--completed'
+                      : scene.analysisState === 'failed'
+                        ? 'ai-story-scene-state--failed'
+                        : 'ai-story-scene-state--pending';
+                  return m(
+                    'tr',
+                    {
+                      key: scene.id,
+                      title: `点击跳转到 ${scene.startTs}`,
+                    },
+                    [
+                      m('td.col-index', `${i + 1}`),
+                      m('td.col-type', `${severity} ${displayName}`),
+                      m('td.col-duration', dur),
+                      m('td.col-process', scene.processName ?? '-'),
+                      m(
+                        'td',
+                        m(
+                          `span.ai-story-scene-state.${stateClass}`,
+                          scene.analysisState ?? 'not_planned',
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ),
             ]),
           ])
         : null,
 
-      m('button.ai-story-btn-ghost-accent', {
-        onclick: () => {
-          // Do NOT reset to idle — that re-triggers handleStoryPreview()
-          // which hits the cache again and shows the same old result.
-          this.state.storyState.cachedReport = null;
-          this.state.storyState.preview = null;
-          this.handleStoryConfirm({forceRefresh: true});
+      m(
+        'button.ai-story-btn-ghost-accent',
+        {
+          onclick: () => {
+            // Do NOT reset to idle — that re-triggers handleStoryPreview()
+            // which hits the cache again and shows the same old result.
+            this.state.storyState.cachedReport = null;
+            this.state.storyState.preview = null;
+            this.handleStoryConfirm({forceRefresh: true});
+          },
         },
-      }, '重新分析'),
+        '重新分析',
+      ),
     ]);
   }
 
@@ -4771,15 +5840,25 @@ Output MUST follow this exact markdown structure:
     if (!trace) return;
 
     for (const envelope of report.cachedDataEnvelopes) {
-      if (!envelope?.meta?.stepId || !envelope?.data?.columns || !envelope?.data?.rows) continue;
+      if (
+        !envelope?.meta?.stepId ||
+        !envelope?.data?.columns ||
+        !envelope?.data?.rows
+      )
+        continue;
       const overlayId = STEP_TO_OVERLAY.get(envelope.meta.stepId);
       if (overlayId) {
-        createOverlayTrack(trace, overlayId, envelope.data.columns, envelope.data.rows)
-          .catch((err: Error) => console.warn('[AIPanel] Cached overlay creation failed:', err));
+        createOverlayTrack(
+          trace,
+          overlayId,
+          envelope.data.columns,
+          envelope.data.rows,
+        ).catch((err: Error) =>
+          console.warn('[AIPanel] Cached overlay creation failed:', err),
+        );
       }
     }
   }
-
 
   /**
    * Update an existing message by ID
@@ -4787,9 +5866,9 @@ Output MUST follow this exact markdown structure:
   private updateMessage(
     messageId: string,
     updates: Partial<Message>,
-    options: {persist?: boolean} = {}
+    options: {persist?: boolean} = {},
   ) {
-    const index = this.state.messages.findIndex(m => m.id === messageId);
+    const index = this.state.messages.findIndex((m) => m.id === messageId);
     if (index !== -1) {
       this.state.messages[index] = {
         ...this.state.messages[index],
@@ -4812,12 +5891,16 @@ Output MUST follow this exact markdown structure:
    */
   private async detectScenesQuick() {
     if (!this.state.backendTraceId) {
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] No backend trace ID, skipping quick scene detection');
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] No backend trace ID, skipping quick scene detection',
+        );
       return;
     }
 
     if (this.state.scenesLoading) {
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Scene detection already in progress');
+      if (DEBUG_AI_PANEL)
+        console.log('[AIPanel] Scene detection already in progress');
       return;
     }
 
@@ -4825,16 +5908,26 @@ Output MUST follow this exact markdown structure:
     this.state.scenesError = null;
     m.redraw();
 
-    if (DEBUG_AI_PANEL) console.log('[AIPanel] Starting quick scene detection for trace:', this.state.backendTraceId);
+    if (DEBUG_AI_PANEL)
+      console.log(
+        '[AIPanel] Starting quick scene detection for trace:',
+        this.state.backendTraceId,
+      );
 
     try {
-      const response = await this.fetchBackend(buildAssistantApiV1Url(this.state.settings.backendUrl, '/scene-detect-quick'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          traceId: this.state.backendTraceId,
-        }),
-      });
+      const response = await this.fetchBackend(
+        buildAssistantApiV1Url(
+          this.state.settings.backendUrl,
+          '/scene-detect-quick',
+        ),
+        {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            traceId: this.state.backendTraceId,
+          }),
+        },
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -4847,8 +5940,12 @@ Output MUST follow this exact markdown structure:
       }
 
       this.state.detectedScenes = data.scenes || [];
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Quick scene detection complete:', this.state.detectedScenes.length, 'scenes');
-
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] Quick scene detection complete:',
+          this.state.detectedScenes.length,
+          'scenes',
+        );
     } catch (error: any) {
       console.warn('[AIPanel] Quick scene detection failed:', error.message);
       this.state.scenesError = error.message;
@@ -4870,13 +5967,16 @@ Output MUST follow this exact markdown structure:
       matchBy: string;
       priority: number;
       reason: string;
-      expand?: boolean;          // Whether to expand the track after pinning
-      mainThreadOnly?: boolean;  // Only pin main thread (track.chips includes 'main thread')
+      expand?: boolean; // Whether to expand the track after pinning
+      mainThreadOnly?: boolean; // Only pin main thread (track.chips includes 'main thread')
       smartPin?: boolean;
-      skipPin?: boolean;  // v3.1: Skip RenderThread when no active rendering processes
+      skipPin?: boolean; // v3.1: Skip RenderThread when no active rendering processes
       activeProcessNames?: string[];
     }>,
-    activeRenderingProcesses: Array<{processName: string; frameCount: number}> = []
+    activeRenderingProcesses: Array<{
+      processName: string;
+      frameCount: number;
+    }> = [],
   ) {
     if (!this.trace) return;
 
@@ -4887,10 +5987,14 @@ Output MUST follow this exact markdown structure:
     }
 
     const pinnedCount = {count: 0, skipped: 0};
-    const sortedInstructions = [...instructions].sort((a, b) => a.priority - b.priority);
+    const sortedInstructions = [...instructions].sort(
+      (a, b) => a.priority - b.priority,
+    );
 
     // Build set of active process names for smart filtering
-    const activeProcessNames = new Set(activeRenderingProcesses.map(p => p.processName));
+    const activeProcessNames = new Set(
+      activeRenderingProcesses.map((p) => p.processName),
+    );
     const activeProcessNamesList = Array.from(activeProcessNames);
 
     const trackActivityCountCache = new Map<string, number>();
@@ -4905,23 +6009,25 @@ Output MUST follow this exact markdown structure:
 
     // Check if track is suitable for main thread pinning (SliceTrack or ThreadStateTrack)
     const isMainThreadPinnableTrack = (uri: string): boolean => {
-      return isCounterOrSliceTrack(uri, 'SliceTrack') ||
-             isCounterOrSliceTrack(uri, 'ThreadStateTrack');
+      return (
+        isCounterOrSliceTrack(uri, 'SliceTrack') ||
+        isCounterOrSliceTrack(uri, 'ThreadStateTrack')
+      );
     };
 
     const getTrackActivityCount = async (trackNode: any): Promise<number> => {
       const uri = trackNode?.uri as string | undefined;
       if (!uri) return 0;
-      if (trackActivityCountCache.has(uri)) return trackActivityCountCache.get(uri) ?? 0;
+      if (trackActivityCountCache.has(uri))
+        return trackActivityCountCache.get(uri) ?? 0;
 
       const track = this.trace?.tracks.getTrack(uri);
       const trackIdsRaw = track?.tags?.trackIds;
-      const trackIds =
-        Array.isArray(trackIdsRaw)
-          ? trackIdsRaw
-              .map((v: any) => Number(v))
-              .filter((v: number) => Number.isFinite(v))
-          : [];
+      const trackIds = Array.isArray(trackIdsRaw)
+        ? trackIdsRaw
+            .map((v: any) => Number(v))
+            .filter((v: number) => Number.isFinite(v))
+        : [];
       if (trackIds.length === 0) {
         trackActivityCountCache.set(uri, 0);
         return 0;
@@ -4973,29 +6079,47 @@ Output MUST follow this exact markdown structure:
 
     // Debug: Log available track names and active processes
     if (flatTracks) {
-      const trackNames = flatTracks.slice(0, 50).map(t => t.name);
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Available track names (first 50):', trackNames);
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Active rendering processes:', Array.from(activeProcessNames));
-      if (DEBUG_AI_PANEL) console.log('[AIPanel] Active surface hints:', Array.from(activityHints));
+      const trackNames = flatTracks.slice(0, 50).map((t) => t.name);
+      if (DEBUG_AI_PANEL)
+        console.log('[AIPanel] Available track names (first 50):', trackNames);
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] Active rendering processes:',
+          Array.from(activeProcessNames),
+        );
+      if (DEBUG_AI_PANEL)
+        console.log(
+          '[AIPanel] Active surface hints:',
+          Array.from(activityHints),
+        );
     }
 
     // Try using the PinTracksByRegex command first (Perfetto built-in) - but only for non-smart patterns
-    const pinByRegexAvailable = this.trace.commands?.hasCommand?.('dev.perfetto.PinTracksByRegex');
+    const pinByRegexAvailable = this.trace.commands?.hasCommand?.(
+      'dev.perfetto.PinTracksByRegex',
+    );
 
     for (const inst of sortedInstructions) {
       try {
         // v3.1: Skip instructions marked with skipPin (e.g., RenderThread with no active processes)
         if (inst.skipPin) {
-          if (DEBUG_AI_PANEL) console.log(`[AIPanel] Skipped by skipPin flag: ${inst.pattern} - ${inst.reason || 'no reason'}`);
+          if (DEBUG_AI_PANEL)
+            console.log(
+              `[AIPanel] Skipped by skipPin flag: ${inst.pattern} - ${inst.reason || 'no reason'}`,
+            );
           pinnedCount.skipped++;
           continue;
         }
 
         const regex = new RegExp(inst.pattern);
-        const smartProcessNames = inst.activeProcessNames ?? Array.from(activeProcessNames);
-        const shouldSmartFilterByProcess = Boolean(inst.smartPin) && smartProcessNames.length > 0;
+        const smartProcessNames =
+          inst.activeProcessNames ?? Array.from(activeProcessNames);
+        const shouldSmartFilterByProcess =
+          Boolean(inst.smartPin) && smartProcessNames.length > 0;
         const maxPinsForInstruction = getMaxPinsForPattern(inst.pattern);
-        const shouldAttemptDisambiguation = needsActiveDisambiguation(inst.pattern);
+        const shouldAttemptDisambiguation = needsActiveDisambiguation(
+          inst.pattern,
+        );
         let pinnedForInstruction = 0;
 
         // Use built-in pin-by-regex only when we don't need extra filtering.
@@ -5009,7 +6133,11 @@ Output MUST follow this exact markdown structure:
           (inst.matchBy === 'name' || inst.matchBy === 'path');
 
         if (canUsePinByRegex) {
-          this.trace.commands.runCommand('dev.perfetto.PinTracksByRegex', inst.pattern, inst.matchBy);
+          this.trace.commands.runCommand(
+            'dev.perfetto.PinTracksByRegex',
+            inst.pattern,
+            inst.matchBy,
+          );
           pinnedCount.count++;
           continue;
         }
@@ -5017,11 +6145,15 @@ Output MUST follow this exact markdown structure:
         // Manual iteration (supports smart process filtering and mainThreadOnly).
         if (flatTracks) {
           const candidates: any[] = [];
-          const hasActiveContext = smartProcessNames.length > 0 || activityHints.size > 0;
-          const shouldFilterToActive = hasActiveContext && (shouldSmartFilterByProcess || shouldAttemptDisambiguation);
+          const hasActiveContext =
+            smartProcessNames.length > 0 || activityHints.size > 0;
+          const shouldFilterToActive =
+            hasActiveContext &&
+            (shouldSmartFilterByProcess || shouldAttemptDisambiguation);
 
           for (const trackNode of flatTracks) {
-            const matchValue = inst.matchBy === 'uri' ? trackNode.uri : trackNode.name;
+            const matchValue =
+              inst.matchBy === 'uri' ? trackNode.uri : trackNode.name;
             if (!matchValue || !regex.test(matchValue)) continue;
             if (this.shouldIgnoreAutoPinTrackName(trackNode.name || '')) {
               pinnedCount.skipped++;
@@ -5034,7 +6166,8 @@ Output MUST follow this exact markdown structure:
                 pinnedCount.skipped++;
                 continue;
               }
-              const hasMainThreadChip = trackNode.chips?.includes('main thread') ?? false;
+              const hasMainThreadChip =
+                trackNode.chips?.includes('main thread') ?? false;
               // Allow both SliceTrack (events) and ThreadStateTrack (CPU scheduling state)
               if (!hasMainThreadChip || !isMainThreadPinnableTrack(uri)) {
                 pinnedCount.skipped++;
@@ -5043,11 +6176,17 @@ Output MUST follow this exact markdown structure:
             }
 
             if (shouldFilterToActive) {
-              const trackFullPathStr = this.trackFullPathToString(trackNode as any);
-              const matchesProcess = smartProcessNames.some((procName) => trackFullPathStr.includes(procName));
+              const trackFullPathStr = this.trackFullPathToString(
+                trackNode as any,
+              );
+              const matchesProcess = smartProcessNames.some((procName) =>
+                trackFullPathStr.includes(procName),
+              );
               const matchesActivityHint = matchesProcess
                 ? true
-                : Array.from(activityHints).some((hint) => trackFullPathStr.includes(hint));
+                : Array.from(activityHints).some((hint) =>
+                    trackFullPathStr.includes(hint),
+                  );
 
               if (!matchesProcess && !matchesActivityHint) {
                 pinnedCount.skipped++;
@@ -5064,22 +6203,29 @@ Output MUST follow this exact markdown structure:
             // Track by proc+kind to allow both SliceTrack and ThreadStateTrack per process
             const pinnedByProcAndKind = new Set<string>();
             for (const trackNode of flatTracks) {
-              if (this.shouldIgnoreAutoPinTrackName(trackNode.name || '')) continue;
+              if (this.shouldIgnoreAutoPinTrackName(trackNode.name || ''))
+                continue;
               const uri = trackNode.uri as string | undefined;
               if (!uri || !isMainThreadPinnableTrack(uri)) continue;
 
-              const hasMainThreadChip = trackNode.chips?.includes('main thread') ?? false;
+              const hasMainThreadChip =
+                trackNode.chips?.includes('main thread') ?? false;
               if (!hasMainThreadChip) continue;
 
               // Determine track kind for dedup key
               const track = this.trace.tracks.getTrack(uri);
               const kinds = track?.tags?.kinds ?? [];
-              const trackKind = kinds.includes('SliceTrack') ? 'slice' :
-                               kinds.includes('ThreadStateTrack') ? 'state' : 'other';
+              const trackKind = kinds.includes('SliceTrack')
+                ? 'slice'
+                : kinds.includes('ThreadStateTrack')
+                  ? 'state'
+                  : 'other';
 
               if (smartProcessNames.length > 0) {
                 const pathStr = this.trackFullPathToString(trackNode as any);
-                const matchedProc = smartProcessNames.find((p) => pathStr.includes(p));
+                const matchedProc = smartProcessNames.find((p) =>
+                  pathStr.includes(p),
+                );
                 if (!matchedProc) continue;
                 // Allow one SliceTrack and one ThreadStateTrack per process
                 const dedupKey = `${matchedProc}:${trackKind}`;
@@ -5093,7 +6239,8 @@ Output MUST follow this exact markdown structure:
                 pinnedCount.count++;
                 pinnedForInstruction++;
                 // If we don't have per-proc filtering, pin at most 2 (slice + state).
-                if (smartProcessNames.length === 0 && pinnedForInstruction >= 2) break;
+                if (smartProcessNames.length === 0 && pinnedForInstruction >= 2)
+                  break;
               }
             }
             continue;
@@ -5102,29 +6249,43 @@ Output MUST follow this exact markdown structure:
           if (candidates.length > 0) {
             let nodesToPin = candidates;
 
-            if (maxPinsForInstruction !== undefined && candidates.length > maxPinsForInstruction) {
+            if (
+              maxPinsForInstruction !== undefined &&
+              candidates.length > maxPinsForInstruction
+            ) {
               const scored = await Promise.all(
                 candidates.map(async (trackNode) => {
                   let score = await getTrackActivityCount(trackNode);
                   const name = trackNode?.name || '';
 
                   // Prefer tracks tied to the active app surface when possible.
-                  if (/^QueuedBuffer\\b/i.test(name) && activityHints.size > 0) {
-                    if (Array.from(activityHints).some((h) => name.includes(h))) score += 1_000_000;
+                  if (
+                    /^QueuedBuffer\\b/i.test(name) &&
+                    activityHints.size > 0
+                  ) {
+                    if (Array.from(activityHints).some((h) => name.includes(h)))
+                      score += 1_000_000;
                   }
-                  if (/^BufferTX\\b/i.test(name) && smartProcessNames.length > 0) {
-                    if (smartProcessNames.some((p) => name.includes(p))) score += 1_000_000;
+                  if (
+                    /^BufferTX\\b/i.test(name) &&
+                    smartProcessNames.length > 0
+                  ) {
+                    if (smartProcessNames.some((p) => name.includes(p)))
+                      score += 1_000_000;
                   }
                   if (/BufferQueue/i.test(name) && activityHints.size > 0) {
-                    if (Array.from(activityHints).some((h) => name.includes(h))) score += 1_000_000;
+                    if (Array.from(activityHints).some((h) => name.includes(h)))
+                      score += 1_000_000;
                   }
 
                   return {trackNode, score};
-                })
+                }),
               );
 
               scored.sort((a, b) => b.score - a.score);
-              nodesToPin = scored.slice(0, maxPinsForInstruction).map((x) => x.trackNode);
+              nodesToPin = scored
+                .slice(0, maxPinsForInstruction)
+                .map((x) => x.trackNode);
             }
 
             for (const trackNode of nodesToPin) {
@@ -5133,17 +6294,27 @@ Output MUST follow this exact markdown structure:
               if (inst.expand) trackNode.expand();
               pinnedCount.count++;
               pinnedForInstruction++;
-              if (maxPinsForInstruction && pinnedForInstruction >= maxPinsForInstruction) break;
+              if (
+                maxPinsForInstruction &&
+                pinnedForInstruction >= maxPinsForInstruction
+              )
+                break;
             }
           }
         }
       } catch (e) {
-        console.warn(`[AIPanel] Failed to pin tracks with pattern ${inst.pattern}:`, e);
+        console.warn(
+          `[AIPanel] Failed to pin tracks with pattern ${inst.pattern}:`,
+          e,
+        );
       }
     }
 
     if (pinnedCount.count > 0 || pinnedCount.skipped > 0) {
-      if (DEBUG_AI_PANEL) console.log(`[AIPanel] Pinned ${pinnedCount.count} tracks for teaching (skipped ${pinnedCount.skipped} inactive)`);
+      if (DEBUG_AI_PANEL)
+        console.log(
+          `[AIPanel] Pinned ${pinnedCount.count} tracks for teaching (skipped ${pinnedCount.skipped} inactive)`,
+        );
     }
   }
 
@@ -5177,13 +6348,18 @@ Output MUST follow this exact markdown structure:
   /**
    * 渲染 Session 历史侧边栏（分区显示：当前对话 + 历史对话）
    */
-  private renderSessionSidebar(sessions: AISession[], _currentIndex: number): m.Children {
+  private renderSessionSidebar(
+    sessions: AISession[],
+    _currentIndex: number,
+  ): m.Children {
     // 找到当前 Session
-    const currentSession = sessions.find(s => s.sessionId === this.state.currentSessionId);
+    const currentSession = sessions.find(
+      (s) => s.sessionId === this.state.currentSessionId,
+    );
 
     // 历史 Sessions（排除当前，按最后活动时间倒序）
     const historySessions = sessions
-      .filter(s => s.sessionId !== this.state.currentSessionId)
+      .filter((s) => s.sessionId !== this.state.currentSessionId)
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
 
     // 渲染单个 Session 项
@@ -5192,42 +6368,56 @@ Output MUST follow this exact markdown structure:
       const lastActive = this.formatRelativeTime(session.lastActiveAt);
 
       // 获取 session 摘要（取第一条用户消息或自动生成）
-      const userMessages = session.messages.filter(m => m.role === 'user');
+      const userMessages = session.messages.filter((m) => m.role === 'user');
       const summary = isCurrent
         ? '当前对话'
-        : (session.summary || (userMessages.length > 0 ? userMessages[0].content.slice(0, 30) : '新对话'));
+        : session.summary ||
+          (userMessages.length > 0
+            ? userMessages[0].content.slice(0, 30)
+            : '新对话');
 
-      return m('div.ai-session-sidebar-item', {
-        class: isCurrent ? 'current' : '',
-        onclick: () => {
-          if (!isCurrent) {
-            this.loadSession(session.sessionId);
-          }
+      return m(
+        'div.ai-session-sidebar-item',
+        {
+          class: isCurrent ? 'current' : '',
+          onclick: () => {
+            if (!isCurrent) {
+              this.loadSession(session.sessionId);
+            }
+          },
+          title: isCurrent ? '当前对话' : summary,
         },
-        title: isCurrent ? '当前对话' : summary,
-      }, [
-        m('div.ai-session-sidebar-item-indicator', isCurrent ? '●' : '○'),
-        m('div.ai-session-sidebar-item-content', [
-          m('div.ai-session-sidebar-item-summary', summary + (!isCurrent && summary.length >= 30 ? '...' : '')),
-          m('div.ai-session-sidebar-item-meta', [
-            m('span', `${messageCount} 条`),
-            m('span', '·'),
-            m('span', lastActive),
+        [
+          m('div.ai-session-sidebar-item-indicator', isCurrent ? '●' : '○'),
+          m('div.ai-session-sidebar-item-content', [
+            m(
+              'div.ai-session-sidebar-item-summary',
+              summary + (!isCurrent && summary.length >= 30 ? '...' : ''),
+            ),
+            m('div.ai-session-sidebar-item-meta', [
+              m('span', `${messageCount} 条`),
+              m('span', '·'),
+              m('span', lastActive),
+            ]),
           ]),
-        ]),
-        // 删除按钮（只对历史 session 显示）
-        !isCurrent
-          ? m('button.ai-session-sidebar-item-delete', {
-              onclick: (e: MouseEvent) => {
-                e.stopPropagation();
-                if (confirm('确定删除这个对话？')) {
-                  this.deleteSession(session.sessionId);
-                }
-              },
-              title: '删除对话',
-            }, m('i.pf-icon', 'close'))
-          : null,
-      ]);
+          // 删除按钮（只对历史 session 显示）
+          !isCurrent
+            ? m(
+                'button.ai-session-sidebar-item-delete',
+                {
+                  onclick: (e: MouseEvent) => {
+                    e.stopPropagation();
+                    if (confirm('确定删除这个对话？')) {
+                      this.deleteSession(session.sessionId);
+                    }
+                  },
+                  title: '删除对话',
+                },
+                m('i.pf-icon', 'close'),
+              )
+            : null,
+        ],
+      );
     };
 
     return m('div.ai-session-sidebar', [
@@ -5248,31 +6438,33 @@ Output MUST follow this exact markdown structure:
           : null,
 
         // 历史对话列表
-        historySessions.map(session => renderSessionItem(session, false)),
+        historySessions.map((session) => renderSessionItem(session, false)),
       ]),
 
       // 新建对话按钮
-      m('button.ai-session-sidebar-new', {
-        onclick: () => {
-          this.cancelSSEConnection();
-          this.resetInterventionState();
-          // 保存当前 session 再创建新的
-          this.saveCurrentSession();
-          this.createNewSession();
-          this.state.messages = [];
-          this.state.agentSessionId = null;  // Reset Agent session for new conversation
-          this.clearAgentObservability();
-          if (this.state.backendTraceId || this.engine?.mode === 'HTTP_RPC') {
-            this.addRpcModeWelcomeMessage();
-          } else {
-            this.addBackendUnavailableMessage();
-          }
-          m.redraw();
+      m(
+        'button.ai-session-sidebar-new',
+        {
+          onclick: () => {
+            this.cancelSSEConnection();
+            this.resetInterventionState();
+            // 保存当前 session 再创建新的
+            this.saveCurrentSession();
+            this.createNewSession();
+            this.state.messages = [];
+            this.state.agentSessionId = null; // Reset Agent session for new conversation
+            this.clearAgentObservability();
+            if (this.state.backendTraceId || this.engine?.mode === 'HTTP_RPC') {
+              this.addRpcModeWelcomeMessage();
+            } else {
+              this.addBackendUnavailableMessage();
+            }
+            m.redraw();
+          },
+          title: '新建对话',
         },
-        title: '新建对话',
-      }, [
-        m('i.pf-icon', 'add'),
-      ]),
+        [m('i.pf-icon', 'add')],
+      ),
     ]);
   }
 
@@ -5294,12 +6486,12 @@ Output MUST follow this exact markdown structure:
     return '刚刚';
   }
 
-
-
   /**
    * Jump to a specific timestamp in the Perfetto timeline
    */
-  private jumpToTimestamp(timestampNs: bigint): {ok: true} | {ok: false; error: string} {
+  private jumpToTimestamp(
+    timestampNs: bigint,
+  ): {ok: true} | {ok: false; error: string} {
     if (!this.trace) {
       console.error('[AIPanel] No trace available for navigation');
       return {ok: false, error: 'trace context is not available'};
@@ -5320,7 +6512,8 @@ Output MUST follow this exact markdown structure:
       const startNs = timestampNs - windowNs / BigInt(2);
       const endNs = timestampNs + windowNs / BigInt(2);
 
-      if (DEBUG_AI_PANEL) console.log(`[AIPanel] Jumping to timestamp: ${timestampNs}ns`);
+      if (DEBUG_AI_PANEL)
+        console.log(`[AIPanel] Jumping to timestamp: ${timestampNs}ns`);
 
       this.trace.scrollTo({
         time: {
@@ -5352,8 +6545,8 @@ Output MUST follow this exact markdown structure:
     this.state.messages = [];
     this.state.commandHistory = [];
     this.state.historyIndex = -1;
-    this.state.pinnedResults = [];  // Clear pinned results
-    this.state.agentSessionId = null;  // Clear Agent session for multi-turn dialogue
+    this.state.pinnedResults = []; // Clear pinned results
+    this.state.agentSessionId = null; // Clear Agent session for multi-turn dialogue
     this.revealedBlockCounts.clear();
     this.state.completionHandled = false;
     this.state.displayedSkillProgress = new Set();
@@ -5409,30 +6602,34 @@ Output MUST follow this exact markdown structure:
   private snapshotTransientState(): TransientState {
     // isLoading tracks active analysis more reliably than sseConnectionState
     // (which may be 'disconnected' briefly between connect retries).
-    const isAnalysisActive = this.state.isLoading || !!this.state.agentSessionId;
+    const isAnalysisActive =
+      this.state.isLoading || !!this.state.agentSessionId;
     return {
       inputDraft: this.state.input,
       collapsedTables: Array.from(this.state.collapsedTables),
       historyIndex: this.state.historyIndex,
-      activeAnalysis: isAnalysisActive && this.state.agentSessionId
-        ? {
-            agentSessionId: this.state.agentSessionId,
-            lastEventId: this.state.sseLastEventId,
-            agentRunId: this.state.agentRunId,
-            agentRequestId: this.state.agentRequestId,
-            agentRunSequence: this.state.agentRunSequence,
-            loadingPhase: this.state.loadingPhase,
-            // Dedup sets + completion flag — shallow clone (old instance
-            // is frozen after saver's cancelSSEConnection, won't mutate).
-            displayedSkillProgress: Array.from(this.state.displayedSkillProgress),
-            completionHandled: this.state.completionHandled,
-            collectedErrors: [...this.state.collectedErrors],
-            // Streaming UI state — shallow clone of outer object, deep
-            // clone of collections that would otherwise be shared refs.
-            streamingFlow: this.cloneStreamingFlow(),
-            streamingAnswer: {...this.state.streamingAnswer},
-          }
-        : null,
+      activeAnalysis:
+        isAnalysisActive && this.state.agentSessionId
+          ? {
+              agentSessionId: this.state.agentSessionId,
+              lastEventId: this.state.sseLastEventId,
+              agentRunId: this.state.agentRunId,
+              agentRequestId: this.state.agentRequestId,
+              agentRunSequence: this.state.agentRunSequence,
+              loadingPhase: this.state.loadingPhase,
+              // Dedup sets + completion flag — shallow clone (old instance
+              // is frozen after saver's cancelSSEConnection, won't mutate).
+              displayedSkillProgress: Array.from(
+                this.state.displayedSkillProgress,
+              ),
+              completionHandled: this.state.completionHandled,
+              collectedErrors: [...this.state.collectedErrors],
+              // Streaming UI state — shallow clone of outer object, deep
+              // clone of collections that would otherwise be shared refs.
+              streamingFlow: this.cloneStreamingFlow(),
+              streamingAnswer: {...this.state.streamingAnswer},
+            }
+          : null,
     };
   }
 
@@ -5497,7 +6694,10 @@ Output MUST follow this exact markdown structure:
       // appends ?lastEventId=N. The backend replays any events that
       // arrived during the unmount-remount gap.
       this.setLoadingState(true);
-      void this.listenToAgentSSE(a.agentSessionId, /* resumeFromLastEventId */ true);
+      void this.listenToAgentSSE(
+        a.agentSessionId,
+        /* resumeFromLastEventId */ true,
+      );
     }
   }
 
@@ -5516,25 +6716,32 @@ Output MUST follow this exact markdown structure:
   /**
    * Export SQL result to CSV or JSON
    */
-  private async exportResult(result: SqlQueryResult, format: 'csv' | 'json'): Promise<void> {
+  private async exportResult(
+    result: SqlQueryResult,
+    format: 'csv' | 'json',
+  ): Promise<void> {
     this.setLoadingState(true);
     m.redraw();
 
     try {
-      const response = await this.fetchBackend(`${this.state.settings.backendUrl}/api/export/result`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          result: {
-            columns: result.columns,
-            rows: result.rows,
-            rowCount: result.rowCount,
-            query: result.query,
-          },
-          format,
-          options: format === 'json' ? { prettyPrint: true } : { includeHeaders: true },
-        }),
-      });
+      const response = await this.fetchBackend(
+        `${this.state.settings.backendUrl}/api/export/result`,
+        {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            result: {
+              columns: result.columns,
+              rows: result.rows,
+              rowCount: result.rowCount,
+              query: result.query,
+            },
+            format,
+            options:
+              format === 'json' ? {prettyPrint: true} : {includeHeaders: true},
+          }),
+        },
+      );
 
       if (!response.ok) {
         throw new Error(`Export failed: ${response.statusText}`);
@@ -5543,7 +6750,9 @@ Output MUST follow this exact markdown structure:
       // Get filename from Content-Disposition header or generate one
       const contentDisp = response.headers.get('Content-Disposition') || '';
       const filenameMatch = contentDisp.match(/filename="(.+)"/);
-      const filename = filenameMatch ? filenameMatch[1] : `result-${Date.now()}.${format}`;
+      const filename = filenameMatch
+        ? filenameMatch[1]
+        : `result-${Date.now()}.${format}`;
 
       // Download file
       const blob = await response.blob();
@@ -5578,11 +6787,13 @@ Output MUST follow this exact markdown structure:
   /**
    * Export current session
    */
-  private async exportCurrentSession(format: 'csv' | 'json' = 'json'): Promise<void> {
+  private async exportCurrentSession(
+    format: 'csv' | 'json' = 'json',
+  ): Promise<void> {
     // Collect all SQL results from messages
     const results = this.state.messages
-      .filter(msg => msg.sqlResult)
-      .map(msg => ({
+      .filter((msg) => msg.sqlResult)
+      .map((msg) => ({
         name: `Query at ${new Date(msg.timestamp).toLocaleTimeString()}`,
         result: msg.sqlResult!,
       }));
@@ -5601,15 +6812,19 @@ Output MUST follow this exact markdown structure:
     m.redraw();
 
     try {
-      const response = await this.fetchBackend(`${this.state.settings.backendUrl}/api/export/session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          results,
-          format,
-          options: format === 'json' ? { prettyPrint: true } : { includeHeaders: true },
-        }),
-      });
+      const response = await this.fetchBackend(
+        `${this.state.settings.backendUrl}/api/export/session`,
+        {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            results,
+            format,
+            options:
+              format === 'json' ? {prettyPrint: true} : {includeHeaders: true},
+          }),
+        },
+      );
 
       if (!response.ok) {
         throw new Error(`Export failed: ${response.statusText}`);
@@ -5617,7 +6832,9 @@ Output MUST follow this exact markdown structure:
 
       const contentDisp = response.headers.get('Content-Disposition') || '';
       const filenameMatch = contentDisp.match(/filename="(.+)"/);
-      const filename = filenameMatch ? filenameMatch[1] : `session-${Date.now()}.${format}`;
+      const filename = filenameMatch
+        ? filenameMatch[1]
+        : `session-${Date.now()}.${format}`;
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -5683,11 +6900,11 @@ Output MUST follow this exact markdown structure:
   private extractBookmarksFromQueryResult(
     query: string,
     columns: string[],
-    rows: any[][]
+    rows: any[][],
   ): void {
     // 只处理包含时间戳的查询结果
-    const tsColumnIndex = columns.findIndex(col =>
-      /^ts$|^timestamp$|^start_ts$|_ts$/i.test(col)
+    const tsColumnIndex = columns.findIndex((col) =>
+      /^ts$|^timestamp$|^start_ts$|_ts$/i.test(col),
     );
 
     if (tsColumnIndex === -1 || rows.length === 0) {
@@ -5701,13 +6918,21 @@ Output MUST follow this exact markdown structure:
     let bookmarkType: NavigationBookmark['type'] = 'custom';
     let labelPrefix = '关键点';
 
-    if (queryLower.includes('jank') || queryLower.includes('掉帧') || queryLower.includes('frame')) {
+    if (
+      queryLower.includes('jank') ||
+      queryLower.includes('掉帧') ||
+      queryLower.includes('frame')
+    ) {
       bookmarkType = 'jank';
       labelPrefix = '掉帧';
     } else if (queryLower.includes('anr')) {
       bookmarkType = 'anr';
       labelPrefix = 'ANR';
-    } else if (queryLower.includes('slow') || queryLower.includes('慢') || queryLower.includes('dur')) {
+    } else if (
+      queryLower.includes('slow') ||
+      queryLower.includes('慢') ||
+      queryLower.includes('dur')
+    ) {
       bookmarkType = 'slow_function';
       labelPrefix = '慢函数';
     } else if (queryLower.includes('binder')) {
@@ -5723,10 +6948,10 @@ Output MUST follow this exact markdown structure:
       const timestamp = row[tsColumnIndex];
       if (typeof timestamp === 'number' && timestamp > 0) {
         // 尝试获取更多上下文信息
-        const nameColumnIndex = columns.findIndex(col =>
-          /name|slice|function/i.test(col)
+        const nameColumnIndex = columns.findIndex((col) =>
+          /name|slice|function/i.test(col),
         );
-        const durColumnIndex = columns.findIndex(col => /^dur$/i.test(col));
+        const durColumnIndex = columns.findIndex((col) => /^dur$/i.test(col));
 
         let description = `${labelPrefix} #${index + 1}`;
         if (nameColumnIndex >= 0 && row[nameColumnIndex]) {
@@ -5750,7 +6975,10 @@ Output MUST follow this exact markdown structure:
     // 更新书签列表
     if (bookmarks.length > 0) {
       this.state.bookmarks = bookmarks;
-      if (DEBUG_AI_PANEL) console.log(`Extracted ${bookmarks.length} bookmarks from query result`);
+      if (DEBUG_AI_PANEL)
+        console.log(
+          `Extracted ${bookmarks.length} bookmarks from query result`,
+        );
       // AI Everywhere: also create timeline notes for visual annotation
       if (this.trace) {
         const findings = addBookmarkNotes(this.trace, bookmarks);
@@ -5824,58 +7052,112 @@ Output MUST follow this exact markdown structure:
 
   /** Render trace picker modal for selecting a reference trace. */
   private renderTracePicker(): m.Vnode {
-    return m('div.ai-modal-overlay', {
-      onclick: (e: Event) => {
-        if ((e.target as HTMLElement).classList.contains('ai-modal-overlay')) {
-          this.state.showTracePicker = false;
-          m.redraw();
-        }
+    return m(
+      'div.ai-modal-overlay',
+      {
+        onclick: (e: Event) => {
+          if (
+            (e.target as HTMLElement).classList.contains('ai-modal-overlay')
+          ) {
+            this.state.showTracePicker = false;
+            m.redraw();
+          }
+        },
       },
-    }, m('div.ai-modal.ai-trace-picker', [
-      m('div.ai-modal-header', [
-        m('span', '选择对比 Trace'),
-        m('button.ai-modal-close', {
-          onclick: () => { this.state.showTracePicker = false; m.redraw(); },
-        }, '\u00D7'),
+      m('div.ai-modal.ai-trace-picker', [
+        m('div.ai-modal-header', [
+          m('span', '选择对比 Trace'),
+          m(
+            'button.ai-modal-close',
+            {
+              onclick: () => {
+                this.state.showTracePicker = false;
+                m.redraw();
+              },
+            },
+            '\u00D7',
+          ),
+        ]),
+        m('div.ai-modal-body', [
+          this.state.comparisonTraceLoading
+            ? m('div.ai-trace-picker-loading', '加载 Trace 列表中...')
+            : m('div.ai-trace-picker-list', [
+                // Show available traces from backend
+                this.availableTraces.length > 0
+                  ? this.availableTraces
+                      .filter((t) => t.id !== this.state.backendTraceId) // Exclude current trace
+                      .map((t) =>
+                        m(
+                          'div.ai-trace-picker-item',
+                          {
+                            key: t.id,
+                            onclick: () =>
+                              this.enterComparisonMode(
+                                t.id,
+                                t.originalName || t.id,
+                              ),
+                            class:
+                              this.state.referenceTraceId === t.id
+                                ? 'selected'
+                                : '',
+                          },
+                          [
+                            m(
+                              'div.ai-trace-picker-item-name',
+                              t.originalName || t.id,
+                            ),
+                            m(
+                              'div.ai-trace-picker-item-meta',
+                              [
+                                t.uploadedAt
+                                  ? new Date(t.uploadedAt).toLocaleString()
+                                  : '',
+                                t.size
+                                  ? ` · ${(t.size / 1024 / 1024).toFixed(1)}MB`
+                                  : '',
+                              ]
+                                .filter(Boolean)
+                                .join(''),
+                            ),
+                          ],
+                        ),
+                      )
+                  : m(
+                      'div.ai-trace-picker-empty',
+                      '没有可用的参考 Trace。请先上传另一个 Trace 文件到后端。',
+                    ),
+              ]),
+        ]),
+        m('div.ai-modal-footer', [
+          this.state.referenceTraceId
+            ? m(
+                'button.ai-btn-secondary',
+                {
+                  onclick: () => this.exitComparisonMode(),
+                },
+                '退出对比',
+              )
+            : null,
+          m(
+            'button.ai-btn-secondary',
+            {
+              onclick: () => {
+                this.state.showTracePicker = false;
+                m.redraw();
+              },
+            },
+            '取消',
+          ),
+        ]),
       ]),
-      m('div.ai-modal-body', [
-        this.state.comparisonTraceLoading
-          ? m('div.ai-trace-picker-loading', '加载 Trace 列表中...')
-          : m('div.ai-trace-picker-list', [
-              // Show available traces from backend
-              this.availableTraces.length > 0
-                ? this.availableTraces
-                    .filter(t => t.id !== this.state.backendTraceId) // Exclude current trace
-                    .map(t => m('div.ai-trace-picker-item', {
-                      key: t.id,
-                      onclick: () => this.enterComparisonMode(t.id, t.originalName || t.id),
-                      class: this.state.referenceTraceId === t.id ? 'selected' : '',
-                    }, [
-                      m('div.ai-trace-picker-item-name', t.originalName || t.id),
-                      m('div.ai-trace-picker-item-meta', [
-                        t.uploadedAt ? new Date(t.uploadedAt).toLocaleString() : '',
-                        t.size ? ` · ${(t.size / 1024 / 1024).toFixed(1)}MB` : '',
-                      ].filter(Boolean).join('')),
-                    ]))
-                : m('div.ai-trace-picker-empty',
-                    '没有可用的参考 Trace。请先上传另一个 Trace 文件到后端。'),
-            ]),
-      ]),
-      m('div.ai-modal-footer', [
-        this.state.referenceTraceId
-          ? m('button.ai-btn-secondary', {
-              onclick: () => this.exitComparisonMode(),
-            }, '退出对比')
-          : null,
-        m('button.ai-btn-secondary', {
-          onclick: () => { this.state.showTracePicker = false; m.redraw(); },
-        }, '取消'),
-      ]),
-    ]));
+    );
   }
 
   /** Enter comparison mode with a reference trace. */
-  private async enterComparisonMode(refTraceId: string, refTraceName: string): Promise<void> {
+  private async enterComparisonMode(
+    refTraceId: string,
+    refTraceName: string,
+  ): Promise<void> {
     this.state.referenceTraceId = refTraceId;
     this.state.referenceTraceName = refTraceName;
     this.state.showTracePicker = false;
@@ -5884,7 +7166,8 @@ Output MUST follow this exact markdown structure:
     this.addMessage({
       id: this.generateId(),
       role: 'system',
-      content: `**对比模式已激活**\n\n` +
+      content:
+        `**对比模式已激活**\n\n` +
         `- 主 Trace: ${this.trace?.traceInfo?.traceTitle || '当前 Trace'}\n` +
         `- 参考 Trace: ${refTraceName}\n\n` +
         `你可以直接提问，AI 会同时分析两个 Trace 并输出对比结论。\n` +
@@ -5921,8 +7204,8 @@ Output MUST follow this exact markdown structure:
     if (!this.state.referenceTraceId) return;
 
     const targetTraceId = this.state.isReferenceActive
-      ? this.state.backendTraceId  // Switch back to primary → open primary in new tab
-      : this.state.referenceTraceId;  // Switch to reference → open reference in new tab
+      ? this.state.backendTraceId // Switch back to primary → open primary in new tab
+      : this.state.referenceTraceId; // Switch to reference → open reference in new tab
 
     if (!targetTraceId) return;
 

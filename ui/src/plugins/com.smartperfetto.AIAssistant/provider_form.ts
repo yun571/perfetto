@@ -9,12 +9,12 @@ import {
   ProviderTemplate,
   FormState,
   BedrockAuthMethod,
-  TYPE_ICONS,
   CONNECTION_FIELD_LABELS,
   buildHeaders,
   apiUrl,
   createEmptyForm,
 } from './provider_types';
+import {renderProviderIcon} from './provider_icons';
 import {getTokens, STYLES as getStyles} from './provider_styles';
 
 export interface ProviderFormAttrs {
@@ -48,7 +48,9 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         models: {...editingProvider.models},
         connection: {...editingProvider.connection},
         tuning: editingProvider.tuning ? {...editingProvider.tuning} : {},
-        showTuning: !!editingProvider.tuning && Object.keys(editingProvider.tuning).length > 0,
+        showTuning:
+          !!editingProvider.tuning &&
+          Object.keys(editingProvider.tuning).length > 0,
         useBedrock: editingProvider.connection.useBedrock !== false,
         bedrockAuthMethod: this.inferAuthMethod(editingProvider.connection),
       };
@@ -93,7 +95,10 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     this.expandedSection = 'name';
   }
 
-  private inferAuthMethod(conn: {awsBearerToken?: string; awsProfile?: string}): BedrockAuthMethod {
+  private inferAuthMethod(conn: {
+    awsBearerToken?: string;
+    awsProfile?: string;
+  }): BedrockAuthMethod {
     if (conn.awsBearerToken) return 'bearer';
     if (conn.awsProfile) return 'profile';
     return 'accessKey';
@@ -103,25 +108,32 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     if (this.isEdit) {
       this.expandedSection = section;
     } else {
-      this.expandedSection = this.expandedSection === section ? ('' as AccordionSection) : section;
+      this.expandedSection =
+        this.expandedSection === section ? ('' as AccordionSection) : section;
     }
   }
 
-  private isSectionComplete(section: AccordionSection, template?: ProviderTemplate): boolean {
+  private isSectionComplete(
+    section: AccordionSection,
+    template?: ProviderTemplate,
+  ): boolean {
     switch (section) {
       case 'name':
         return this.form.name.trim().length > 0;
       case 'connection': {
         if (!template) return false;
-        const requiredFields = (template.requiredFields || [])
-          .map((f) => f.replace(/^connection\./, ''));
+        const requiredFields = (template.requiredFields || []).map((f) =>
+          f.replace(/^connection\./, ''),
+        );
         return requiredFields.every((f) => {
           const val = (this.form.connection as Record<string, string>)[f];
           return val && val.trim().length > 0;
         });
       }
       case 'models':
-        return !!(this.form.models.primary?.trim() && this.form.models.light?.trim());
+        return !!(
+          this.form.models.primary?.trim() && this.form.models.light?.trim()
+        );
       case 'tuning':
         return true;
     }
@@ -138,9 +150,12 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
       name: this.form.name,
       type: this.form.type,
       models: {
-        primary: this.form.models.primary || template?.defaultModels.primary || '',
+        primary:
+          this.form.models.primary || template?.defaultModels.primary || '',
         light: this.form.models.light || template?.defaultModels.light || '',
-        ...(this.form.models.subAgent ? {subAgent: this.form.models.subAgent} : {}),
+        ...(this.form.models.subAgent
+          ? {subAgent: this.form.models.subAgent}
+          : {}),
       },
       connection,
     };
@@ -171,7 +186,9 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error((errData as {error?: string}).error || `Save failed: ${res.status}`);
+        throw new Error(
+          (errData as {error?: string}).error || `Save failed: ${res.status}`,
+        );
       }
 
       onSaved();
@@ -190,61 +207,105 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     const {templates, onCancel} = vnode.attrs;
     const template = templates.find((tmpl) => tmpl.type === this.form.type);
 
-    return m('div', {style: {
-      ...s.container,
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column' as const,
-    }}, [
-      this.error
-        ? m('div', {style: s.errorBanner}, [
-            m('span', '⚠️'),
-            m('span', this.error),
-          ])
-        : null,
+    return m(
+      'div',
+      {
+        style: {
+          ...s.container,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column' as const,
+        },
+      },
+      [
+        this.error
+          ? m('div', {style: s.errorBanner}, [
+              m('span', '⚠️'),
+              m('span', this.error),
+            ])
+          : null,
 
-      m('div', {style: s.header}, [
-        m('div', [
-          m('h3', {style: s.title}, this.isEdit ? 'Edit Provider' : 'Add Provider'),
-          m('p', {style: s.subtitle}, this.isEdit ? 'Modify provider configuration' : 'Configure a new AI provider'),
+        m('div', {style: s.header}, [
+          m('div', [
+            m(
+              'h3',
+              {style: s.title},
+              this.isEdit ? 'Edit Provider' : 'Add Provider',
+            ),
+            m(
+              'p',
+              {style: s.subtitle},
+              this.isEdit
+                ? 'Modify provider configuration'
+                : 'Configure a new AI provider',
+            ),
+          ]),
+          m(
+            'button',
+            {
+              style: {...s.btn, ...s.btnSecondary},
+              onclick: () => onCancel(),
+            },
+            '← Back',
+          ),
         ]),
-        m('button', {
-          style: {...s.btn, ...s.btnSecondary},
-          onclick: () => onCancel(),
-        }, '← Back'),
-      ]),
 
-      m('div', {style: {flex: 1, overflowY: 'auto' as const, paddingBottom: '8px'}}, [
-        this.renderTypeGrid(t, s, templates),
-        m('div', {style: {marginTop: '16px'}},
-          this.renderAccordion(t, s, template, vnode.attrs),
+        m(
+          'div',
+          {style: {flex: 1, overflowY: 'auto' as const, paddingBottom: '8px'}},
+          [
+            this.renderTypeGrid(t, s, templates),
+            m(
+              'div',
+              {style: {marginTop: '16px'}},
+              this.renderAccordion(t, s, template, vnode.attrs),
+            ),
+          ],
         ),
-      ]),
 
-      m('div', {style: {
-        display: 'flex',
-        justifyContent: 'flex-end',
-        gap: '10px',
-        padding: '12px 20px',
-        borderTop: `1px solid ${t.border}`,
-        backgroundColor: t.bg,
-        flexShrink: 0,
-      }}, [
-        m('button', {
-          style: {...s.btn, ...s.btnSecondary},
-          onclick: () => onCancel(),
-        }, 'Close'),
-        m('button', {
-          style: {
-            ...s.btn,
-            ...s.btnPrimary,
-            ...(!this.form.name || this.saving ? s.btnDisabled : {}),
+        m(
+          'div',
+          {
+            style: {
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '10px',
+              padding: '12px 20px',
+              borderTop: `1px solid ${t.border}`,
+              backgroundColor: t.bg,
+              flexShrink: 0,
+            },
           },
-          disabled: !this.form.name || this.saving,
-          onclick: () => this.saveProvider(vnode.attrs),
-        }, this.saving ? 'Saving...' : (this.isEdit ? 'Save Changes' : 'Create Provider')),
-      ]),
-    ]);
+          [
+            m(
+              'button',
+              {
+                style: {...s.btn, ...s.btnSecondary},
+                onclick: () => onCancel(),
+              },
+              'Close',
+            ),
+            m(
+              'button',
+              {
+                style: {
+                  ...s.btn,
+                  ...s.btnPrimary,
+                  ...(!this.form.name || this.saving ? s.btnDisabled : {}),
+                },
+                disabled: !this.form.name || this.saving,
+                onclick: () => this.saveProvider(vnode.attrs),
+              },
+              this.saving
+                ? 'Saving...'
+                : this.isEdit
+                  ? 'Save Changes'
+                  : 'Create Provider',
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   private renderTypeGrid(
@@ -252,7 +313,9 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     s: ReturnType<typeof getStyles>,
     templates: ProviderTemplate[],
   ): m.Children {
-    return m('div', {style: s.typeGrid},
+    return m(
+      'div',
+      {style: s.typeGrid},
       templates.map((tmpl) => {
         const isSelected = this.form.type === tmpl.type;
         const isDisabled = this.isEdit;
@@ -261,17 +324,27 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
           ...(isSelected ? s.typeCardSelected : {}),
           ...(isDisabled ? s.typeCardDisabled : {}),
         };
-        return m('div', {
-          key: tmpl.type,
-          style: cardStyle,
-          onclick: isDisabled ? undefined : () => {
-            this.onTypeChange(tmpl.type, templates);
-            m.redraw();
+        return m(
+          'div',
+          {
+            key: tmpl.type,
+            style: cardStyle,
+            onclick: isDisabled
+              ? undefined
+              : () => {
+                  this.onTypeChange(tmpl.type, templates);
+                  m.redraw();
+                },
           },
-        }, [
-          m('div', {style: s.typeCardIcon}, TYPE_ICONS[tmpl.type] || '\u{1F527}'),
-          m('div', {style: s.typeCardLabel}, tmpl.displayName),
-        ]);
+          [
+            m(
+              'div',
+              {style: s.typeCardIcon},
+              renderProviderIcon(tmpl.type, 24),
+            ),
+            m('div', {style: s.typeCardLabel}, tmpl.displayName),
+          ],
+        );
       }),
     );
   }
@@ -295,32 +368,44 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         const isComplete = this.isSectionComplete(key, template);
 
         return m('div', {key, style: s.accordionSection}, [
-          m('div', {
-            style: s.accordionHeader,
-            onclick: () => {
-              this.toggleSection(key);
-              m.redraw();
-            },
-          }, [
-            m('div', {style: s.accordionHeaderLeft}, [
-              m('div', {
-                style: {
-                  ...s.accordionDot,
-                  ...(isComplete ? s.accordionDotComplete : s.accordionDotPending),
-                },
-              }),
-              m('span', {style: s.accordionTitle}, title),
-            ]),
-            m('span', {
-              style: {
-                ...s.accordionChevron,
-                transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+          m(
+            'div',
+            {
+              style: s.accordionHeader,
+              onclick: () => {
+                this.toggleSection(key);
+                m.redraw();
               },
-            }, '▼'),
-          ]),
+            },
+            [
+              m('div', {style: s.accordionHeaderLeft}, [
+                m('div', {
+                  style: {
+                    ...s.accordionDot,
+                    ...(isComplete
+                      ? s.accordionDotComplete
+                      : s.accordionDotPending),
+                  },
+                }),
+                m('span', {style: s.accordionTitle}, title),
+              ]),
+              m(
+                'span',
+                {
+                  style: {
+                    ...s.accordionChevron,
+                    transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  },
+                },
+                '▼',
+              ),
+            ],
+          ),
 
           isOpen
-            ? m('div', {style: s.accordionBody},
+            ? m(
+                'div',
+                {style: s.accordionBody},
                 this.renderSectionContent(key, t, s, template, attrs),
               )
             : null,
@@ -370,21 +455,32 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     template?: ProviderTemplate,
   ): m.Children {
     if (!template) {
-      return m('div', {style: s.formField}, m('span', {style: s.formHint}, 'Select a provider type first.'));
+      return m(
+        'div',
+        {style: s.formField},
+        m('span', {style: s.formHint}, 'Select a provider type first.'),
+      );
     }
 
     if (this.form.type === 'bedrock') {
       return this.renderBedrockConnection(s);
     }
 
-    const requiredFields = (template.requiredFields || [])
-      .map((f) => f.replace(/^connection\./, ''));
+    const requiredFields = (template.requiredFields || []).map((f) =>
+      f.replace(/^connection\./, ''),
+    );
 
     if (requiredFields.length === 0) {
-      return m('div', {style: s.formField}, m('span', {style: s.formHint}, 'No connection fields required.'));
+      return m(
+        'div',
+        {style: s.formField},
+        m('span', {style: s.formHint}, 'No connection fields required.'),
+      );
     }
 
-    return m('div', {},
+    return m(
+      'div',
+      {},
       requiredFields.map((field) => {
         const meta = CONNECTION_FIELD_LABELS[field] || {
           label: field,
@@ -395,10 +491,12 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
           m('label', {style: s.formLabel}, meta.label),
           m(`input[type=${meta.type}]`, {
             style: s.formInput,
-            value: (this.form.connection as Record<string, string>)[field] || '',
+            value:
+              (this.form.connection as Record<string, string>)[field] || '',
             oninput: (e: Event) => {
-              (this.form.connection as Record<string, string>)[field] =
-                (e.target as HTMLInputElement).value;
+              (this.form.connection as Record<string, string>)[field] = (
+                e.target as HTMLInputElement
+              ).value;
             },
             placeholder: meta.placeholder,
           }),
@@ -411,17 +509,45 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     const t = getTokens();
     const conn = this.form.connection as Record<string, string>;
 
-    const authFields: Record<BedrockAuthMethod, Array<{key: string; label: string; type: string; placeholder: string}>> = {
+    const authFields: Record<
+      BedrockAuthMethod,
+      Array<{key: string; label: string; type: string; placeholder: string}>
+    > = {
       bearer: [
-        {key: 'awsBearerToken', label: 'AWS Bearer Token', type: 'password', placeholder: 'Bearer token for Bedrock access'},
+        {
+          key: 'awsBearerToken',
+          label: 'AWS Bearer Token',
+          type: 'password',
+          placeholder: 'Bearer token for Bedrock access',
+        },
       ],
       accessKey: [
-        {key: 'awsAccessKeyId', label: 'AWS Access Key ID', type: 'text', placeholder: 'AKIA...'},
-        {key: 'awsSecretAccessKey', label: 'AWS Secret Access Key', type: 'password', placeholder: 'Secret key...'},
-        {key: 'awsSessionToken', label: 'Session Token (optional)', type: 'password', placeholder: 'Temporary session token...'},
+        {
+          key: 'awsAccessKeyId',
+          label: 'AWS Access Key ID',
+          type: 'text',
+          placeholder: 'AKIA...',
+        },
+        {
+          key: 'awsSecretAccessKey',
+          label: 'AWS Secret Access Key',
+          type: 'password',
+          placeholder: 'Secret key...',
+        },
+        {
+          key: 'awsSessionToken',
+          label: 'Session Token (optional)',
+          type: 'password',
+          placeholder: 'Temporary session token...',
+        },
       ],
       profile: [
-        {key: 'awsProfile', label: 'AWS Profile Name', type: 'text', placeholder: 'default'},
+        {
+          key: 'awsProfile',
+          label: 'AWS Profile Name',
+          type: 'text',
+          placeholder: 'default',
+        },
       ],
     };
 
@@ -431,10 +557,16 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         m('input[type=text]', {
           style: s.formInput,
           value: conn['awsRegion'] || '',
-          oninput: (e: Event) => { conn['awsRegion'] = (e.target as HTMLInputElement).value; },
+          oninput: (e: Event) => {
+            conn['awsRegion'] = (e.target as HTMLInputElement).value;
+          },
           placeholder: 'us-east-1 (leave empty to use AWS_REGION env)',
         }),
-        m('div', {style: s.formHint}, 'Leave empty to inherit from AWS_REGION environment variable'),
+        m(
+          'div',
+          {style: s.formHint},
+          'Leave empty to inherit from AWS_REGION environment variable',
+        ),
       ]),
 
       m('div', {style: s.formField}, [
@@ -442,68 +574,131 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         m('input[type=password]', {
           style: s.formInput,
           value: conn['apiKey'] || '',
-          oninput: (e: Event) => { conn['apiKey'] = (e.target as HTMLInputElement).value; },
+          oninput: (e: Event) => {
+            conn['apiKey'] = (e.target as HTMLInputElement).value;
+          },
           placeholder: 'sk-ant-... (for Anthropic proxy, if applicable)',
         }),
-        m('div', {style: s.formHint}, 'Only needed if using an Anthropic API proxy in front of Bedrock'),
-      ]),
-
-      m('div', {style: {
-        marginTop: '16px',
-        paddingTop: '12px',
-        borderTop: `1px solid ${t.border}`,
-      }}, [
-        m('div', {key: 'adv-title', style: {...s.formLabel, fontSize: '12px', color: t.textSecondary, textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '12px'}}, 'Advanced Configuration'),
-
-        m('div', {key: 'adv-usebedrock', style: {...s.formField, display: 'flex', alignItems: 'center', gap: '8px'}}, [
-          m('input[type=checkbox]', {
-            checked: this.form.useBedrock,
-            onchange: (e: Event) => {
-              this.form.useBedrock = (e.target as HTMLInputElement).checked;
-            },
-          }),
-          m('label', {style: {...s.formLabel, margin: 0}}, 'Use Bedrock'),
-          m('span', {style: {fontSize: '11px', color: t.textMuted}}, '(CLAUDE_CODE_USE_BEDROCK=1)'),
-        ]),
-
-        m('div', {key: 'adv-authmethod', style: s.formField}, [
-          m('label', {style: s.formLabel}, 'Authentication Method'),
-          m('select', {
-            style: s.formSelect,
-            value: this.form.bedrockAuthMethod,
-            onchange: (e: Event) => {
-              this.form.bedrockAuthMethod = (e.target as HTMLSelectElement).value as BedrockAuthMethod;
-            },
-          }, [
-            m('option', {value: 'accessKey'}, 'Access Key (AWS_ACCESS_KEY_ID + Secret)'),
-            m('option', {value: 'bearer'}, 'Bearer Token (AWS_BEARER_TOKEN_BEDROCK)'),
-            m('option', {value: 'profile'}, 'AWS Profile (AWS_PROFILE)'),
-          ]),
-        ]),
-
-        ...authFields[this.form.bedrockAuthMethod].map((field) =>
-          m('div', {key: field.key, style: s.formField}, [
-            m('label', {style: s.formLabel}, field.label),
-            m(`input[type=${field.type}]`, {
-              style: s.formInput,
-              value: conn[field.key] || '',
-              oninput: (e: Event) => { conn[field.key] = (e.target as HTMLInputElement).value; },
-              placeholder: field.placeholder,
-            }),
-          ]),
+        m(
+          'div',
+          {style: s.formHint},
+          'Only needed if using an Anthropic API proxy in front of Bedrock',
         ),
-
-        m('div', {key: 'adv-baseurl', style: s.formField}, [
-          m('label', {style: s.formLabel}, 'Bedrock Base URL (optional)'),
-          m('input[type=text]', {
-            style: s.formInput,
-            value: conn['baseUrl'] || '',
-            oninput: (e: Event) => { conn['baseUrl'] = (e.target as HTMLInputElement).value; },
-            placeholder: 'https://bedrock-runtime.us-east-1.amazonaws.com',
-          }),
-          m('div', {style: s.formHint}, 'Maps to ANTHROPIC_BEDROCK_BASE_URL. Leave empty for default.'),
-        ]),
       ]),
+
+      m(
+        'div',
+        {
+          style: {
+            marginTop: '16px',
+            paddingTop: '12px',
+            borderTop: `1px solid ${t.border}`,
+          },
+        },
+        [
+          m(
+            'div',
+            {
+              key: 'adv-title',
+              style: {
+                ...s.formLabel,
+                fontSize: '12px',
+                color: t.textSecondary,
+                textTransform: 'uppercase' as const,
+                letterSpacing: '0.5px',
+                marginBottom: '12px',
+              },
+            },
+            'Advanced Configuration',
+          ),
+
+          m(
+            'div',
+            {
+              key: 'adv-usebedrock',
+              style: {
+                ...s.formField,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              },
+            },
+            [
+              m('input[type=checkbox]', {
+                checked: this.form.useBedrock,
+                onchange: (e: Event) => {
+                  this.form.useBedrock = (e.target as HTMLInputElement).checked;
+                },
+              }),
+              m('label', {style: {...s.formLabel, margin: 0}}, 'Use Bedrock'),
+              m(
+                'span',
+                {style: {fontSize: '11px', color: t.textMuted}},
+                '(CLAUDE_CODE_USE_BEDROCK=1)',
+              ),
+            ],
+          ),
+
+          m('div', {key: 'adv-authmethod', style: s.formField}, [
+            m('label', {style: s.formLabel}, 'Authentication Method'),
+            m(
+              'select',
+              {
+                style: s.formSelect,
+                value: this.form.bedrockAuthMethod,
+                onchange: (e: Event) => {
+                  this.form.bedrockAuthMethod = (e.target as HTMLSelectElement)
+                    .value as BedrockAuthMethod;
+                },
+              },
+              [
+                m(
+                  'option',
+                  {value: 'accessKey'},
+                  'Access Key (AWS_ACCESS_KEY_ID + Secret)',
+                ),
+                m(
+                  'option',
+                  {value: 'bearer'},
+                  'Bearer Token (AWS_BEARER_TOKEN_BEDROCK)',
+                ),
+                m('option', {value: 'profile'}, 'AWS Profile (AWS_PROFILE)'),
+              ],
+            ),
+          ]),
+
+          ...authFields[this.form.bedrockAuthMethod].map((field) =>
+            m('div', {key: field.key, style: s.formField}, [
+              m('label', {style: s.formLabel}, field.label),
+              m(`input[type=${field.type}]`, {
+                style: s.formInput,
+                value: conn[field.key] || '',
+                oninput: (e: Event) => {
+                  conn[field.key] = (e.target as HTMLInputElement).value;
+                },
+                placeholder: field.placeholder,
+              }),
+            ]),
+          ),
+
+          m('div', {key: 'adv-baseurl', style: s.formField}, [
+            m('label', {style: s.formLabel}, 'Bedrock Base URL (optional)'),
+            m('input[type=text]', {
+              style: s.formInput,
+              value: conn['baseUrl'] || '',
+              oninput: (e: Event) => {
+                conn['baseUrl'] = (e.target as HTMLInputElement).value;
+              },
+              placeholder: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+            }),
+            m(
+              'div',
+              {style: s.formHint},
+              'Maps to ANTHROPIC_BEDROCK_BASE_URL. Leave empty for default.',
+            ),
+          ]),
+        ],
+      ),
     ]);
   }
 
@@ -511,24 +706,34 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     s: ReturnType<typeof getStyles>,
     template?: ProviderTemplate,
   ): m.Children {
-    const hasAvailableModels = !!(template?.availableModels && template.availableModels.length > 0);
+    const hasAvailableModels = !!(
+      template?.availableModels && template.availableModels.length > 0
+    );
 
-    const modelField = (label: string, key: 'primary' | 'light', defaultVal?: string) =>
+    const modelField = (
+      label: string,
+      key: 'primary' | 'light',
+      defaultVal?: string,
+    ) =>
       m('div', {style: s.formField}, [
         m('label', {style: s.formLabel}, label),
         hasAvailableModels
-          ? m('select', {
-              style: s.formSelect,
-              value: this.form.models[key] || '',
-              onchange: (e: Event) => {
-                this.form.models[key] = (e.target as HTMLSelectElement).value;
+          ? m(
+              'select',
+              {
+                style: s.formSelect,
+                value: this.form.models[key] || '',
+                onchange: (e: Event) => {
+                  this.form.models[key] = (e.target as HTMLSelectElement).value;
+                },
               },
-            }, [
-              m('option', {value: ''}, '-- Select --'),
-              ...(template?.availableModels || []).map((mdl) =>
-                m('option', {value: mdl.id}, `${mdl.name} (${mdl.tier})`),
-              ),
-            ])
+              [
+                m('option', {value: ''}, '-- Select --'),
+                ...(template?.availableModels || []).map((mdl) =>
+                  m('option', {value: mdl.id}, `${mdl.name} (${mdl.tier})`),
+                ),
+              ],
+            )
           : m('input[type=text]', {
               style: s.formInput,
               value: this.form.models[key] || '',
@@ -551,7 +756,8 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
           style: s.formInput,
           value: this.form.models.subAgent || '',
           oninput: (e: Event) => {
-            this.form.models.subAgent = (e.target as HTMLInputElement).value || undefined;
+            this.form.models.subAgent =
+              (e.target as HTMLInputElement).value || undefined;
           },
           placeholder: 'Leave empty to inherit primary',
         }),
@@ -565,7 +771,11 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
   ): m.Children {
     const tuning = this.form.tuning;
 
-    const numField = (label: string, key: keyof ProviderTuning, placeholder: string) =>
+    const numField = (
+      label: string,
+      key: keyof ProviderTuning,
+      placeholder: string,
+    ) =>
       m('div', {style: s.formField}, [
         m('label', {style: s.formLabel}, label),
         m('input[type=number]', {
@@ -583,46 +793,68 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         }),
       ]);
 
-    const boolField = (label: string, key: 'enableSubAgents' | 'enableVerification') =>
-      m('div', {style: {...s.formField, display: 'flex', alignItems: 'center', gap: '8px'}}, [
-        m('input[type=checkbox]', {
-          checked: tuning[key] ?? true,
-          onchange: (e: Event) => {
-            tuning[key] = (e.target as HTMLInputElement).checked;
+    const boolField = (
+      label: string,
+      key: 'enableSubAgents' | 'enableVerification',
+    ) =>
+      m(
+        'div',
+        {
+          style: {
+            ...s.formField,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
           },
-        }),
-        m('label', {style: {...s.formLabel, margin: 0}}, label),
-      ]);
+        },
+        [
+          m('input[type=checkbox]', {
+            checked: tuning[key] ?? true,
+            onchange: (e: Event) => {
+              tuning[key] = (e.target as HTMLInputElement).checked;
+            },
+          }),
+          m('label', {style: {...s.formLabel, margin: 0}}, label),
+        ],
+      );
 
-    return m('div', {style: {paddingLeft: '12px', borderLeft: `2px solid ${t.border}`}}, [
-      numField('Max Turns', 'maxTurns', '30'),
-      m('div', {style: s.formField}, [
-        m('label', {style: s.formLabel}, 'Effort Level'),
-        m('select', {
-          style: s.formSelect,
-          value: tuning.effort || '',
-          onchange: (e: Event) => {
-            const val = (e.target as HTMLSelectElement).value;
-            if (val) {
-              tuning.effort = val;
-            } else {
-              delete tuning.effort;
-            }
-          },
-        }, [
-          m('option', {value: ''}, '-- Default --'),
-          m('option', {value: 'low'}, 'Low'),
-          m('option', {value: 'medium'}, 'Medium'),
-          m('option', {value: 'high'}, 'High'),
+    return m(
+      'div',
+      {style: {paddingLeft: '12px', borderLeft: `2px solid ${t.border}`}},
+      [
+        numField('Max Turns', 'maxTurns', '30'),
+        m('div', {style: s.formField}, [
+          m('label', {style: s.formLabel}, 'Effort Level'),
+          m(
+            'select',
+            {
+              style: s.formSelect,
+              value: tuning.effort || '',
+              onchange: (e: Event) => {
+                const val = (e.target as HTMLSelectElement).value;
+                if (val) {
+                  tuning.effort = val;
+                } else {
+                  delete tuning.effort;
+                }
+              },
+            },
+            [
+              m('option', {value: ''}, '-- Default --'),
+              m('option', {value: 'low'}, 'Low'),
+              m('option', {value: 'medium'}, 'Medium'),
+              m('option', {value: 'high'}, 'High'),
+            ],
+          ),
         ]),
-      ]),
-      numField('Max Budget (USD)', 'maxBudgetUsd', '5'),
-      numField('Full Per-turn Timeout (ms)', 'fullPerTurnMs', '60000'),
-      numField('Quick Per-turn Timeout (ms)', 'quickPerTurnMs', '40000'),
-      numField('Verifier Timeout (ms)', 'verifierTimeoutMs', '60000'),
-      numField('Classifier Timeout (ms)', 'classifierTimeoutMs', '30000'),
-      boolField('Enable Sub-agents', 'enableSubAgents'),
-      boolField('Enable Verification', 'enableVerification'),
-    ]);
+        numField('Max Budget (USD)', 'maxBudgetUsd', '5'),
+        numField('Full Per-turn Timeout (ms)', 'fullPerTurnMs', '60000'),
+        numField('Quick Per-turn Timeout (ms)', 'quickPerTurnMs', '40000'),
+        numField('Verifier Timeout (ms)', 'verifierTimeoutMs', '60000'),
+        numField('Classifier Timeout (ms)', 'classifierTimeoutMs', '30000'),
+        boolField('Enable Sub-agents', 'enableSubAgents'),
+        boolField('Enable Verification', 'enableVerification'),
+      ],
+    );
   }
 }

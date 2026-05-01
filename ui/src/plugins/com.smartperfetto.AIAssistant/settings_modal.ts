@@ -34,15 +34,19 @@ export interface SettingsModalAttrs {
 const COLORS = {
   primary: 'var(--chat-primary, #3d5688)',
   primaryHover: 'var(--chat-primary-hover, #2e4470)',
-  primaryLight: 'color-mix(in srgb, var(--chat-primary, #3d5688) 12%, transparent)',
+  primaryLight:
+    'color-mix(in srgb, var(--chat-primary, #3d5688) 12%, transparent)',
   success: 'var(--chat-success, #10b981)',
-  successLight: 'color-mix(in srgb, var(--chat-success, #10b981) 12%, transparent)',
+  successLight:
+    'color-mix(in srgb, var(--chat-success, #10b981) 12%, transparent)',
   warning: 'var(--chat-warning, #f59e0b)',
-  warningLight: 'color-mix(in srgb, var(--chat-warning, #f59e0b) 12%, transparent)',
+  warningLight:
+    'color-mix(in srgb, var(--chat-warning, #f59e0b) 12%, transparent)',
   error: 'var(--chat-error, #ef4444)',
   errorLight: 'color-mix(in srgb, var(--chat-error, #ef4444) 12%, transparent)',
   info: 'var(--chat-primary, #3b82f6)',
-  infoLight: 'color-mix(in srgb, var(--chat-primary, #3b82f6) 12%, transparent)',
+  infoLight:
+    'color-mix(in srgb, var(--chat-primary, #3b82f6) 12%, transparent)',
 };
 
 // Inline styles for modal
@@ -72,7 +76,8 @@ const MODAL_STYLES = {
     overflow: 'hidden' as const,
     display: 'flex' as const,
     flexDirection: 'column' as const,
-    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4), 0 0 1px rgba(255, 255, 255, 0.1)',
+    boxShadow:
+      '0 20px 60px rgba(0, 0, 0, 0.4), 0 0 1px rgba(255, 255, 255, 0.1)',
     border: '1px solid var(--chat-border)',
     animation: 'slideUp 0.3s ease-out',
   },
@@ -333,26 +338,52 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
 
     if (!status.connected) {
       return m('div', {style: MODAL_STYLES.statusCard}, [
-        m('div', {style: {...MODAL_STYLES.statusHeaderRow, color: COLORS.error}}, [
-          m('span', {style: {...MODAL_STYLES.statusDot, backgroundColor: COLORS.error}}),
-          m('span', {style: MODAL_STYLES.statusHeaderText}, 'Connection Failed'),
-        ]),
-        m('div', {style: {...MODAL_STYLES.hint, marginTop: '8px', lineHeight: '1.5'}},
-          'Cannot reach backend. Make sure the backend is running and the URL is correct.'),
+        m(
+          'div',
+          {style: {...MODAL_STYLES.statusHeaderRow, color: COLORS.error}},
+          [
+            m('span', {
+              style: {...MODAL_STYLES.statusDot, backgroundColor: COLORS.error},
+            }),
+            m(
+              'span',
+              {style: MODAL_STYLES.statusHeaderText},
+              'Connection Failed',
+            ),
+          ],
+        ),
+        m(
+          'div',
+          {style: {...MODAL_STYLES.hint, marginTop: '8px', lineHeight: '1.5'}},
+          'Cannot reach backend. Make sure the backend is running and the URL is correct.',
+        ),
       ]);
     }
 
-    const runtimeLabel = status.runtime === 'agentv3'
-      ? 'Claude Agent SDK (agentv3)'
-      : status.runtime === 'agentv2'
-        ? 'Legacy Agent (agentv2)'
-        : 'Unknown';
+    const runtimeLabel =
+      status.runtime === 'agentv3'
+        ? 'Claude Agent SDK (agentv3)'
+        : status.runtime === 'agentv2'
+          ? 'Legacy Agent (agentv2)'
+          : 'Unknown';
 
     return m('div', {style: MODAL_STYLES.statusCard}, [
-      m('div', {style: {...MODAL_STYLES.statusHeaderRow, color: COLORS.success, marginBottom: '12px'}}, [
-        m('span', {style: {...MODAL_STYLES.statusDot, backgroundColor: COLORS.success}}),
-        m('span', {style: MODAL_STYLES.statusHeaderText}, 'Connected'),
-      ]),
+      m(
+        'div',
+        {
+          style: {
+            ...MODAL_STYLES.statusHeaderRow,
+            color: COLORS.success,
+            marginBottom: '12px',
+          },
+        },
+        [
+          m('span', {
+            style: {...MODAL_STYLES.statusDot, backgroundColor: COLORS.success},
+          }),
+          m('span', {style: MODAL_STYLES.statusHeaderText}, 'Connected'),
+        ],
+      ),
       m('div', {style: MODAL_STYLES.statusRow}, [
         m('span', {style: MODAL_STYLES.statusLabel}, 'Engine'),
         m('span', {style: MODAL_STYLES.statusValue}, runtimeLabel),
@@ -360,13 +391,31 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
       status.model
         ? m('div', {style: MODAL_STYLES.statusRow}, [
             m('span', {style: MODAL_STYLES.statusLabel}, 'Model'),
-            m('span', {style: {...MODAL_STYLES.statusValue, fontFamily: 'monospace', fontSize: '12px'}}, status.model),
+            m(
+              'span',
+              {
+                style: {
+                  ...MODAL_STYLES.statusValue,
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                },
+              },
+              status.model,
+            ),
           ])
         : null,
       m('div', {style: MODAL_STYLES.statusRow}, [
         m('span', {style: MODAL_STYLES.statusLabel}, 'AI Ready'),
-        m('span', {style: {...MODAL_STYLES.statusValue, color: status.configured ? COLORS.success : COLORS.error}},
-          status.configured ? 'Yes' : 'No (API key missing)'),
+        m(
+          'span',
+          {
+            style: {
+              ...MODAL_STYLES.statusValue,
+              color: status.configured ? COLORS.success : COLORS.error,
+            },
+          },
+          status.configured ? 'Yes' : 'No (API key missing)',
+        ),
       ]),
       status.environment
         ? m('div', {style: MODAL_STYLES.statusRow}, [
@@ -376,10 +425,23 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
         : null,
       // Auth warning
       status.authRequired
-        ? m('div', {style: {...MODAL_STYLES.alertBox, ...MODAL_STYLES.alertWarning, marginTop: '12px'}}, [
-            m('span', {style: MODAL_STYLES.alertIcon}, '!'),
-            m('div', 'Backend requires API key authentication (SMARTPERFETTO_API_KEY). Make sure the API Key field above is correctly configured.'),
-          ])
+        ? m(
+            'div',
+            {
+              style: {
+                ...MODAL_STYLES.alertBox,
+                ...MODAL_STYLES.alertWarning,
+                marginTop: '12px',
+              },
+            },
+            [
+              m('span', {style: MODAL_STYLES.alertIcon}, '!'),
+              m(
+                'div',
+                'Backend requires API key authentication (SMARTPERFETTO_API_KEY). Make sure the API Key field above is correctly configured.',
+              ),
+            ],
+          )
         : null,
     ]);
   }
@@ -388,135 +450,172 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
     return m(
       'div',
       {style: MODAL_STYLES.overlay},
-      m(
-        'div',
-        {style: MODAL_STYLES.modal},
-        [
-          m('div', {style: MODAL_STYLES.header}, [
-            m('div', {style: MODAL_STYLES.headerLeft}, [
-              m('span', {style: MODAL_STYLES.headerIcon}, '⚙️'),
-              m('h3', {style: MODAL_STYLES.title}, 'AI Assistant Settings'),
-            ]),
-            m(
-              'button',
-              {
-                style: MODAL_STYLES.closeBtn,
-                onclick: () => vnode.attrs.onClose(),
-              },
-              '×'
-            ),
+      m('div', {style: MODAL_STYLES.modal}, [
+        m('div', {style: MODAL_STYLES.header}, [
+          m('div', {style: MODAL_STYLES.headerLeft}, [
+            m('span', {style: MODAL_STYLES.headerIcon}, '⚙️'),
+            m('h3', {style: MODAL_STYLES.title}, 'AI Assistant Settings'),
           ]),
+          m(
+            'button',
+            {
+              style: MODAL_STYLES.closeBtn,
+              onclick: () => vnode.attrs.onClose(),
+            },
+            '×',
+          ),
+        ]),
 
-          m('div', {style: TAB_STYLES.tabBar}, [
-            m('button', {
+        m('div', {style: TAB_STYLES.tabBar}, [
+          m(
+            'button',
+            {
               style: {
                 ...TAB_STYLES.tab,
-                ...(this.currentTab === 'connection' ? TAB_STYLES.tabActive : {}),
+                ...(this.currentTab === 'connection'
+                  ? TAB_STYLES.tabActive
+                  : {}),
               },
-              onclick: () => { this.currentTab = 'connection'; },
-            }, '\u{1F50C} Connection'),
-            m('button', {
+              onclick: () => {
+                this.currentTab = 'connection';
+              },
+            },
+            '\u{1F50C} Connection',
+          ),
+          m(
+            'button',
+            {
               style: {
                 ...TAB_STYLES.tab,
-                ...(this.currentTab === 'providers' ? TAB_STYLES.tabActive : {}),
+                ...(this.currentTab === 'providers'
+                  ? TAB_STYLES.tabActive
+                  : {}),
               },
-              onclick: () => { this.currentTab = 'providers'; },
-            }, '\u{1F916} Providers'),
-          ]),
+              onclick: () => {
+                this.currentTab = 'providers';
+              },
+            },
+            '\u{1F916} Providers',
+          ),
+        ]),
 
-          this.currentTab === 'providers'
-            ? m('div', {style: {...MODAL_STYLES.content, padding: 0}}, [
-                m(ProviderPanel, {
-                  backendUrl: this.settings.backendUrl,
-                  apiKey: this.settings.backendApiKey || undefined,
-                  onClose: () => vnode.attrs.onClose(),
-                }),
-              ])
-            : m('div', {style: MODAL_STYLES.content}, [
-            m('div', {style: MODAL_STYLES.section}, [
-              m('h4', {style: MODAL_STYLES.sectionTitle}, 'Backend Connection'),
-              m('div', {style: MODAL_STYLES.field}, [
-                m('label', {style: MODAL_STYLES.fieldLabel}, [
-                  m('span', {style: MODAL_STYLES.fieldIcon}, '🖥️'),
-                  'Backend URL',
-                ]),
-                m('input[type=text]', {
-                  style: MODAL_STYLES.input,
-                  value: this.settings.backendUrl,
-                  onchange: (e: Event) => {
-                    this.settings.backendUrl = (e.target as HTMLInputElement).value;
-                  },
-                  placeholder: 'http://localhost:3000',
-                }),
-              ]),
-              m('div', {style: MODAL_STYLES.field}, [
-                m('label', {style: MODAL_STYLES.fieldLabel}, [
-                  m('span', {style: MODAL_STYLES.fieldIcon}, '🔐'),
-                  'API Key',
-                ]),
-                m('input[type=password]', {
-                  style: MODAL_STYLES.input,
-                  value: this.settings.backendApiKey || '',
-                  onchange: (e: Event) => {
-                    this.settings.backendApiKey = (e.target as HTMLInputElement).value;
-                  },
-                  placeholder: 'Optional: SMARTPERFETTO_API_KEY',
-                }),
-                m('div', {style: MODAL_STYLES.hint}, 'Required only if backend has SMARTPERFETTO_API_KEY configured.'),
-              ]),
-            ]),
-
-            m('div', {style: MODAL_STYLES.section}, [
-              m('h4', {style: MODAL_STYLES.sectionTitle}, 'Server Status'),
-              m('div', {style: {display: 'flex', alignItems: 'center', gap: '12px'}}, [
+        this.currentTab === 'providers'
+          ? m('div', {style: {...MODAL_STYLES.content, padding: 0}}, [
+              m(ProviderPanel, {
+                backendUrl: this.settings.backendUrl,
+                apiKey: this.settings.backendApiKey || undefined,
+                onClose: () => vnode.attrs.onClose(),
+              }),
+            ])
+          : m('div', {style: MODAL_STYLES.content}, [
+              m('div', {style: MODAL_STYLES.section}, [
                 m(
-                  'button',
-                  {
-                    style: {
-                      ...MODAL_STYLES.statusBtn,
-                      ...(this.isChecking ? MODAL_STYLES.statusBtnDisabled : {}),
+                  'h4',
+                  {style: MODAL_STYLES.sectionTitle},
+                  'Backend Connection',
+                ),
+                m('div', {style: MODAL_STYLES.field}, [
+                  m('label', {style: MODAL_STYLES.fieldLabel}, [
+                    m('span', {style: MODAL_STYLES.fieldIcon}, '🖥️'),
+                    'Backend URL',
+                  ]),
+                  m('input[type=text]', {
+                    style: MODAL_STYLES.input,
+                    value: this.settings.backendUrl,
+                    onchange: (e: Event) => {
+                      this.settings.backendUrl = (
+                        e.target as HTMLInputElement
+                      ).value;
                     },
-                    onclick: () => this.checkStatus(),
-                    disabled: this.isChecking,
-                  },
-                  this.isChecking ? '⏳ Checking...' : '🔌 Check Status'
-                ),
+                    placeholder: 'http://localhost:3000',
+                  }),
+                ]),
+                m('div', {style: MODAL_STYLES.field}, [
+                  m('label', {style: MODAL_STYLES.fieldLabel}, [
+                    m('span', {style: MODAL_STYLES.fieldIcon}, '🔐'),
+                    'API Key',
+                  ]),
+                  m('input[type=password]', {
+                    style: MODAL_STYLES.input,
+                    value: this.settings.backendApiKey || '',
+                    onchange: (e: Event) => {
+                      this.settings.backendApiKey = (
+                        e.target as HTMLInputElement
+                      ).value;
+                    },
+                    placeholder: 'Optional: SMARTPERFETTO_API_KEY',
+                  }),
+                  m(
+                    'div',
+                    {style: MODAL_STYLES.hint},
+                    'Required only if backend has SMARTPERFETTO_API_KEY configured.',
+                  ),
+                ]),
               ]),
-              this.renderStatusCard(),
+
+              m('div', {style: MODAL_STYLES.section}, [
+                m('h4', {style: MODAL_STYLES.sectionTitle}, 'Server Status'),
+                m(
+                  'div',
+                  {style: {display: 'flex', alignItems: 'center', gap: '12px'}},
+                  [
+                    m(
+                      'button',
+                      {
+                        style: {
+                          ...MODAL_STYLES.statusBtn,
+                          ...(this.isChecking
+                            ? MODAL_STYLES.statusBtnDisabled
+                            : {}),
+                        },
+                        onclick: () => this.checkStatus(),
+                        disabled: this.isChecking,
+                      },
+                      this.isChecking ? '⏳ Checking...' : '🔌 Check Status',
+                    ),
+                  ],
+                ),
+                this.renderStatusCard(),
+              ]),
+
+              m(
+                'div',
+                {style: {...MODAL_STYLES.alertBox, ...MODAL_STYLES.alertInfo}},
+                [
+                  m('span', {style: MODAL_STYLES.alertIcon}, 'ℹ️'),
+                  m('div', [
+                    m('span', 'Use the '),
+                    m('strong', 'Providers'),
+                    m(
+                      'span',
+                      ' tab to add and switch between AI providers (Anthropic, Bedrock, DeepSeek, Ollama, etc.) without restarting the backend.',
+                    ),
+                  ]),
+                ],
+              ),
             ]),
 
-            m('div', {style: {...MODAL_STYLES.alertBox, ...MODAL_STYLES.alertInfo}}, [
-              m('span', {style: MODAL_STYLES.alertIcon}, 'ℹ️'),
-              m('div', [
-                m('span', 'Use the '),
-                m('strong', 'Providers'),
-                m('span', ' tab to add and switch between AI providers (Anthropic, Bedrock, DeepSeek, Ollama, etc.) without restarting the backend.'),
-              ]),
-            ]),
-          ]),
-
-          this.currentTab === 'connection'
-            ? m('div', {style: MODAL_STYLES.footer}, [
-                m(
-                  'button',
-                  {
-                    style: {...MODAL_STYLES.btn, ...MODAL_STYLES.btnSecondary},
-                    onclick: () => vnode.attrs.onClose(),
-                  },
-                  'Cancel'
-                ),
-                m(
-                  'button',
-                  {
-                    style: {...MODAL_STYLES.btn, ...MODAL_STYLES.btnPrimary},
-                    onclick: () => vnode.attrs.onSave(this.settings),
-                  },
-                  '\u{1F4BE} Save Settings'
-                ),
-              ])
-            : null,
-        ]
-      )
+        this.currentTab === 'connection'
+          ? m('div', {style: MODAL_STYLES.footer}, [
+              m(
+                'button',
+                {
+                  style: {...MODAL_STYLES.btn, ...MODAL_STYLES.btnSecondary},
+                  onclick: () => vnode.attrs.onClose(),
+                },
+                'Cancel',
+              ),
+              m(
+                'button',
+                {
+                  style: {...MODAL_STYLES.btn, ...MODAL_STYLES.btnPrimary},
+                  onclick: () => vnode.attrs.onSave(this.settings),
+                },
+                '\u{1F4BE} Save Settings',
+              ),
+            ])
+          : null,
+      ]),
     );
   }
 }

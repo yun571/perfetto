@@ -6,13 +6,15 @@ import {
   ProviderConfig,
   ProviderQuickSwitcherAttrs,
   HealthStatus,
-  TYPE_ICONS,
   buildHeaders,
   apiUrl,
 } from './provider_types';
+import {renderProviderIcon} from './provider_icons';
 import {getTokens, STYLES as getStyles} from './provider_styles';
 
-export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwitcherAttrs> {
+export class ProviderQuickSwitcher
+  implements m.ClassComponent<ProviderQuickSwitcherAttrs>
+{
   private providers: ProviderConfig[] = [];
   private open = false;
   private loading = false;
@@ -54,7 +56,10 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
         m.redraw();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        this.focusIndex = Math.min(this.focusIndex + 1, this.providers.length - 1);
+        this.focusIndex = Math.min(
+          this.focusIndex + 1,
+          this.providers.length - 1,
+        );
         m.redraw();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
@@ -64,8 +69,15 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
         if (this.focusIndex === -2) {
           const noActive = !this.providers.some((p) => p.isActive);
           if (!noActive) void this.deactivateAll();
-          else { this.open = false; this.focusIndex = -1; m.redraw(); }
-        } else if (this.focusIndex >= 0 && this.focusIndex < this.providers.length) {
+          else {
+            this.open = false;
+            this.focusIndex = -1;
+            m.redraw();
+          }
+        } else if (
+          this.focusIndex >= 0 &&
+          this.focusIndex < this.providers.length
+        ) {
           const p = this.providers[this.focusIndex];
           if (p && !p.isActive) {
             void this.activate(p.id);
@@ -81,7 +93,10 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
   }
 
   onupdate(vnode: m.Vnode<ProviderQuickSwitcherAttrs>) {
-    if (vnode.attrs.backendUrl !== this.backendUrl || vnode.attrs.apiKey !== this.apiKey) {
+    if (
+      vnode.attrs.backendUrl !== this.backendUrl ||
+      vnode.attrs.apiKey !== this.apiKey
+    ) {
       this.backendUrl = vnode.attrs.backendUrl;
       this.apiKey = vnode.attrs.apiKey;
       void this.loadProviders();
@@ -123,7 +138,10 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
     }
   }
 
-  private async activate(id: string, vnode?: m.Vnode<ProviderQuickSwitcherAttrs>) {
+  private async activate(
+    id: string,
+    vnode?: m.Vnode<ProviderQuickSwitcherAttrs>,
+  ) {
     this.activating = true;
     m.redraw();
     try {
@@ -190,7 +208,11 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
   }
 
   view(vnode: m.Vnode<ProviderQuickSwitcherAttrs>): m.Children {
-    if (!this.loading && this.lastLoadedAt > 0 && Date.now() - this.lastLoadedAt > 3000) {
+    if (
+      !this.loading &&
+      this.lastLoadedAt > 0 &&
+      Date.now() - this.lastLoadedAt > 3000
+    ) {
       void this.loadProviders();
     }
 
@@ -199,32 +221,49 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
     const active = this.providers.find((p) => p.isActive);
 
     if (this.loading && this.providers.length === 0) {
-      return m('div', {'data-switcher': true, style: s.switcherContainer}, [
+      return m('div', {'data-switcher': true, 'style': s.switcherContainer}, [
         m('span', {style: {fontSize: '12px', color: t.textSecondary}}, '⏳'),
       ]);
     }
 
     // Even with no providers, show System Default option
 
-    return m('div', {'data-switcher': true, style: s.switcherContainer}, [
-      m('button', {
-        style: s.switcherBtn,
-        onclick: (e: Event) => {
-          e.stopPropagation();
-          if (!this.activating) {
-            this.open = !this.open;
-            if (this.open) this.focusIndex = -1;
-          }
+    return m('div', {'data-switcher': true, 'style': s.switcherContainer}, [
+      m(
+        'button',
+        {
+          style: s.switcherBtn,
+          onclick: (e: Event) => {
+            e.stopPropagation();
+            if (!this.activating) {
+              this.open = !this.open;
+              if (this.open) this.focusIndex = -1;
+            }
+          },
+          disabled: this.activating,
         },
-        disabled: this.activating,
-      }, [
-        this.activating
-          ? m('span', {style: {fontSize: '12px'}}, '⏳')
-          : m('span', active ? TYPE_ICONS[active.type] : '\u{1F4BB}'),
-        m('span', {style: {maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis'}},
-          active?.name || 'System Default'),
-        m('span', {style: {fontSize: '10px', opacity: 0.6}}, this.open ? '▲' : '▼'),
-      ]),
+        [
+          this.activating
+            ? m('span', {style: {fontSize: '12px'}}, '⏳')
+            : renderProviderIcon(active ? active.type : 'custom', 16),
+          m(
+            'span',
+            {
+              style: {
+                maxWidth: '120px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              },
+            },
+            active?.name || 'System Default',
+          ),
+          m(
+            'span',
+            {style: {fontSize: '10px', opacity: 0.6}},
+            this.open ? '▲' : '▼',
+          ),
+        ],
+      ),
 
       this.open ? this.renderDropdown(vnode) : null,
 
@@ -235,12 +274,18 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
   private renderHealthDot(id: string): m.Children {
     const t = getTokens();
     const status = this.healthMap.get(id);
-    const color = status === 'passed' ? t.success
-      : status === 'failed' ? t.error
-      : t.textMuted;
-    const title = status === 'passed' ? 'Healthy'
-      : status === 'failed' ? 'Unhealthy'
-      : 'Not tested';
+    const color =
+      status === 'passed'
+        ? t.success
+        : status === 'failed'
+          ? t.error
+          : t.textMuted;
+    const title =
+      status === 'passed'
+        ? 'Healthy'
+        : status === 'failed'
+          ? 'Unhealthy'
+          : 'Not tested';
     return m('span', {
       title,
       style: {
@@ -254,90 +299,139 @@ export class ProviderQuickSwitcher implements m.ClassComponent<ProviderQuickSwit
     });
   }
 
-  private renderDropdown(vnode: m.Vnode<ProviderQuickSwitcherAttrs>): m.Children {
+  private renderDropdown(
+    vnode: m.Vnode<ProviderQuickSwitcherAttrs>,
+  ): m.Children {
     const t = getTokens();
     const s = getStyles(t);
     const noActiveProvider = !this.providers.some((p) => p.isActive);
     // All items need keys since we mix env item with provider items
-    const envItem = m('div', {
-      key: '__env__',
-      style: {
-        ...s.switcherItem,
-        ...(noActiveProvider ? s.switcherItemActive : {}),
-        ...(this.focusIndex === -2 ? {backgroundColor: t.surfaceHover, outline: `1px solid ${t.accent}`} : {}),
+    const envItem = m(
+      'div',
+      {
+        key: '__env__',
+        style: {
+          ...s.switcherItem,
+          ...(noActiveProvider ? s.switcherItemActive : {}),
+          ...(this.focusIndex === -2
+            ? {
+                backgroundColor: t.surfaceHover,
+                outline: `1px solid ${t.accent}`,
+              }
+            : {}),
+        },
+        onclick: () => {
+          if (!noActiveProvider) void this.deactivateAll(vnode);
+          else {
+            this.open = false;
+            this.focusIndex = -1;
+          }
+        },
+        onmouseenter: () => {
+          this.focusIndex = -2;
+        },
       },
-      onclick: () => {
-        if (!noActiveProvider) void this.deactivateAll(vnode);
-        else { this.open = false; this.focusIndex = -1; }
-      },
-      onmouseenter: () => { this.focusIndex = -2; },
-    }, [
-      m('span', {style: {fontSize: '16px'}}, '\u{1F4BB}'),
-      m('div', {style: {flex: 1, minWidth: 0}}, [
-        m('div', {style: {fontSize: '13px', fontWeight: 500}}, 'System Default'),
-        m('div', {style: {fontSize: '11px', color: t.textSecondary}}, '.env config'),
-      ]),
-      noActiveProvider ? m('div', {style: s.activeDot}) : null,
-    ]);
-
-    return m('div', {
-      style: s.switcherDropdown,
-      onclick: (e: Event) => e.stopPropagation(),
-    }, [
-      envItem,
-      ...this.providers.map((p, i) =>
-        m('div', {
-          style: {
-            ...s.switcherItem,
-            ...(p.isActive ? s.switcherItemActive : {}),
-            ...(i === this.focusIndex ? {
-              backgroundColor: t.surfaceHover,
-              outline: `1px solid ${t.accent}`,
-            } : {}),
-          },
-          key: p.id,
-          onclick: () => {
-            if (!p.isActive) void this.activate(p.id, vnode);
-            else {
-              this.open = false;
-              this.focusIndex = -1;
-            }
-          },
-          onmouseenter: () => { this.focusIndex = i; },
-        }, [
-          m('span', {style: {fontSize: '16px'}}, TYPE_ICONS[p.type]),
-          m('div', {style: {flex: 1, minWidth: 0}}, [
-            m('div', {style: {fontSize: '13px', fontWeight: 500}}, p.name),
-            m('div', {style: {fontSize: '11px', color: t.textSecondary, fontFamily: 'monospace'}},
-              p.models.primary),
-          ]),
-          this.renderHealthDot(p.id),
-          p.isActive ? m('div', {style: s.activeDot}) : null,
+      [
+        m('span', {style: {fontSize: '16px'}}, '\u{1F4BB}'),
+        m('div', {style: {flex: 1, minWidth: 0}}, [
+          m(
+            'div',
+            {style: {fontSize: '13px', fontWeight: 500}},
+            'System Default',
+          ),
+          m(
+            'div',
+            {style: {fontSize: '11px', color: t.textSecondary}},
+            '.env config',
+          ),
         ]),
-      ),
-    ]);
+        noActiveProvider ? m('div', {style: s.activeDot}) : null,
+      ],
+    );
+
+    return m(
+      'div',
+      {
+        style: s.switcherDropdown,
+        onclick: (e: Event) => e.stopPropagation(),
+      },
+      [
+        envItem,
+        ...this.providers.map((p, i) =>
+          m(
+            'div',
+            {
+              style: {
+                ...s.switcherItem,
+                ...(p.isActive ? s.switcherItemActive : {}),
+                ...(i === this.focusIndex
+                  ? {
+                      backgroundColor: t.surfaceHover,
+                      outline: `1px solid ${t.accent}`,
+                    }
+                  : {}),
+              },
+              key: p.id,
+              onclick: () => {
+                if (!p.isActive) void this.activate(p.id, vnode);
+                else {
+                  this.open = false;
+                  this.focusIndex = -1;
+                }
+              },
+              onmouseenter: () => {
+                this.focusIndex = i;
+              },
+            },
+            [
+              renderProviderIcon(p.type, 16),
+              m('div', {style: {flex: 1, minWidth: 0}}, [
+                m('div', {style: {fontSize: '13px', fontWeight: 500}}, p.name),
+                m(
+                  'div',
+                  {
+                    style: {
+                      fontSize: '11px',
+                      color: t.textSecondary,
+                      fontFamily: 'monospace',
+                    },
+                  },
+                  p.models.primary,
+                ),
+              ]),
+              this.renderHealthDot(p.id),
+              p.isActive ? m('div', {style: s.activeDot}) : null,
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   private renderToast(): m.Children {
     const t = getTokens();
-    return m('div', {
-      style: {
-        position: 'absolute' as const,
-        bottom: '110%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        backgroundColor: t.surface,
-        color: t.accent,
-        border: `1px solid ${t.accent}`,
-        borderRadius: '6px',
-        padding: '5px 10px',
-        fontSize: '12px',
-        whiteSpace: 'nowrap' as const,
-        pointerEvents: 'none' as const,
-        zIndex: 9999,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-        animation: 'fadeIn 0.15s ease',
+    return m(
+      'div',
+      {
+        style: {
+          position: 'absolute' as const,
+          bottom: '110%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: t.surface,
+          color: t.accent,
+          border: `1px solid ${t.accent}`,
+          borderRadius: '6px',
+          padding: '5px 10px',
+          fontSize: '12px',
+          whiteSpace: 'nowrap' as const,
+          pointerEvents: 'none' as const,
+          zIndex: 9999,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          animation: 'fadeIn 0.15s ease',
+        },
       },
-    }, this.toastMessage);
+      this.toastMessage,
+    );
   }
 }

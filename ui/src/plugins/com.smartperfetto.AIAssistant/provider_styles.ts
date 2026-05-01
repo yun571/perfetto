@@ -14,20 +14,20 @@ function isDark(): boolean {
 export function getTokens() {
   const dark = isDark();
   return {
-    bg:             dark ? '#1c1c1e' : '#fafaf9',
-    surface:        dark ? '#2c2c2e' : '#ffffff',
-    surfaceHover:   dark ? '#363638' : '#f5f4f2',
-    border:         dark ? '#3a3a3c' : '#e8e5e0',
-    text:           dark ? '#f5f5f7' : '#1a1a1a',
-    textSecondary:  dark ? '#a1a1a6' : '#6b6660',
-    textMuted:      dark ? '#86868b' : '#9e9a94',
-    accent:         dark ? '#d4a574' : '#996633',
-    accentHover:    dark ? '#e0b88a' : '#7a5c2e',
+    bg: dark ? '#1c1c1e' : '#fafaf9',
+    surface: dark ? '#2c2c2e' : '#ffffff',
+    surfaceHover: dark ? '#363638' : '#f5f4f2',
+    border: dark ? '#3a3a3c' : '#e8e5e0',
+    text: dark ? '#f5f5f7' : '#1a1a1a',
+    textSecondary: dark ? '#a1a1a6' : '#6b6660',
+    textMuted: dark ? '#86868b' : '#9e9a94',
+    accent: dark ? '#d4a574' : '#996633',
+    accentHover: dark ? '#e0b88a' : '#7a5c2e',
     accentGradient: dark
       ? 'linear-gradient(135deg, #d4a574, #b8860b)'
       : 'linear-gradient(135deg, #b8860b, #7a5c2e)',
-    success:        dark ? '#34d399' : '#059669',
-    error:          dark ? '#f87171' : '#dc2626',
+    success: dark ? '#34d399' : '#059669',
+    error: dark ? '#f87171' : '#dc2626',
     cardGradient: dark
       ? 'linear-gradient(145deg, #2c2c2e, #252527)'
       : 'linear-gradient(145deg, #ffffff, #f8f7f5)',

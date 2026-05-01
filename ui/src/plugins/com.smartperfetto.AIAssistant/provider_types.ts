@@ -96,16 +96,43 @@ export const CATEGORY_LABELS: Record<ProviderCategory, string> = {
   custom: 'Custom',
 };
 
-export const CONNECTION_FIELD_LABELS: Record<string, {label: string; type: string; placeholder: string}> = {
+export const CONNECTION_FIELD_LABELS: Record<
+  string,
+  {label: string; type: string; placeholder: string}
+> = {
   apiKey: {label: 'API Key', type: 'password', placeholder: 'sk-...'},
-  baseUrl: {label: 'Base URL', type: 'text', placeholder: 'https://api.example.com'},
+  baseUrl: {
+    label: 'Base URL',
+    type: 'text',
+    placeholder: 'https://api.example.com',
+  },
   awsRegion: {label: 'AWS Region', type: 'text', placeholder: 'us-east-1'},
-  awsBearerToken: {label: 'AWS Bearer Token', type: 'password', placeholder: 'Token...'},
-  awsAccessKeyId: {label: 'AWS Access Key ID', type: 'text', placeholder: 'AKIA...'},
-  awsSecretAccessKey: {label: 'AWS Secret Access Key', type: 'password', placeholder: 'Secret...'},
-  awsSessionToken: {label: 'AWS Session Token', type: 'password', placeholder: 'Session token...'},
+  awsBearerToken: {
+    label: 'AWS Bearer Token',
+    type: 'password',
+    placeholder: 'Token...',
+  },
+  awsAccessKeyId: {
+    label: 'AWS Access Key ID',
+    type: 'text',
+    placeholder: 'AKIA...',
+  },
+  awsSecretAccessKey: {
+    label: 'AWS Secret Access Key',
+    type: 'password',
+    placeholder: 'Secret...',
+  },
+  awsSessionToken: {
+    label: 'AWS Session Token',
+    type: 'password',
+    placeholder: 'Session token...',
+  },
   awsProfile: {label: 'AWS Profile', type: 'text', placeholder: 'default'},
-  gcpProjectId: {label: 'GCP Project ID', type: 'text', placeholder: 'my-project-123'},
+  gcpProjectId: {
+    label: 'GCP Project ID',
+    type: 'text',
+    placeholder: 'my-project-123',
+  },
   gcpRegion: {label: 'GCP Region', type: 'text', placeholder: 'us-central1'},
 };
 

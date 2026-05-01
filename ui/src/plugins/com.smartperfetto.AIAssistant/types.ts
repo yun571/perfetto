@@ -34,17 +34,26 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
-  flowTag?: 'streaming_flow' | 'answer_stream' | 'progress_note' | 'round_separator';
+  flowTag?:
+    | 'streaming_flow'
+    | 'answer_stream'
+    | 'progress_note'
+    | 'round_separator';
   /** Model active when this user message was sent — used to show model-change badge */
   model?: string;
   sqlResult?: SqlQueryResult;
   query?: string;
-  reportUrl?: string;  // HTML report link
+  reportUrl?: string; // HTML report link
   // Chart data for visualization (display.format: 'chart')
   chartData?: {
     type: 'pie' | 'bar' | 'histogram';
     title?: string;
-    data: Array<{ label: string; value: number; percentage?: number; color?: string }>;
+    data: Array<{
+      label: string;
+      value: number;
+      percentage?: number;
+      color?: string;
+    }>;
   };
   // Metric card data (display.format: 'metric')
   metricData?: {
@@ -52,7 +61,7 @@ export interface Message {
     value: string | number;
     unit?: string;
     status?: 'good' | 'warning' | 'critical';
-    delta?: string;  // e.g., "+5%" or "-10ms"
+    delta?: string; // e.g., "+5%" or "-10ms"
   };
 }
 
@@ -162,14 +171,14 @@ export interface SqlQueryResult {
   rows: any[][];
   rowCount: number;
   query?: string;
-  sectionTitle?: string;  // For skill_section messages - shows title in table header
-  stepId?: string;        // Skill step identifier (from DataEnvelope.meta.stepId)
-  layer?: string;         // Display layer (overview/list/detail/deep)
+  sectionTitle?: string; // For skill_section messages - shows title in table header
+  stepId?: string; // Skill step identifier (from DataEnvelope.meta.stepId)
+  layer?: string; // Display layer (overview/list/detail/deep)
   // Output structure optimization: grouping and collapse support
-  group?: string;         // Group identifier for interval grouping
-  collapsible?: boolean;  // Whether this table can be collapsed
-  defaultCollapsed?: boolean;  // Whether this table starts collapsed
-  maxVisibleRows?: number;  // Max rows to show before "show more"
+  group?: string; // Group identifier for interval grouping
+  collapsible?: boolean; // Whether this table can be collapsed
+  defaultCollapsed?: boolean; // Whether this table starts collapsed
+  maxVisibleRows?: number; // Max rows to show before "show more"
   // Column definitions for schema-driven rendering (v2.0)
   columnDefinitions?: Array<{
     name: string;
@@ -218,13 +227,13 @@ export interface SqlQueryResult {
  *   idle → previewing → preview_cold   → running → completed | failed
  */
 export type StoryPanelStatus =
-  | 'idle'            // Story tab opened, not yet previewed
-  | 'previewing'      // POST /preview in flight
-  | 'preview_cached'  // Preview returned a cached report
-  | 'preview_cold'    // Preview returned an estimate (no cache)
-  | 'running'         // POST /scene-reconstruct in flight (user confirmed)
-  | 'completed'       // Report ready (fresh or cached)
-  | 'failed';         // Pipeline or preview error
+  | 'idle' // Story tab opened, not yet previewed
+  | 'previewing' // POST /preview in flight
+  | 'preview_cached' // Preview returned a cached report
+  | 'preview_cold' // Preview returned an estimate (no cache)
+  | 'running' // POST /scene-reconstruct in flight (user confirmed)
+  | 'completed' // Report ready (fresh or cached)
+  | 'failed'; // Pipeline or preview error
 
 export interface StoryPreviewEstimate {
   expectedScenes: number;
@@ -277,32 +286,36 @@ export interface AIPanelState {
   messages: Message[];
   input: string;
   isLoading: boolean;
-  loadingPhase: string;  // Current analysis phase text (from SSE progress events)
+  loadingPhase: string; // Current analysis phase text (from SSE progress events)
   showSettings: boolean;
-  aiService: any | null;  // AIService type from ai_service.ts
+  aiService: any | null; // AIService type from ai_service.ts
   settings: AISettings;
   commandHistory: string[];
   historyIndex: number;
   lastQuery: string;
   pinnedResults: PinnedResult[];
   backendTraceId: string | null;
-  bookmarks: NavigationBookmark[];  // Navigation bookmarks
-  currentTraceFingerprint: string | null;  // Current Trace fingerprint
-  currentSessionId: string | null;  // Current Session ID
-  isRetryingBackend: boolean;  // Retrying backend connection
-  retryError: string | null;  // Retry connection error message
-  agentSessionId: string | null;  // Agent multi-turn dialogue Session ID
-  agentRunId: string | null;      // Current/last agent run ID for observability
-  agentRequestId: string | null;  // Current/last request ID for observability
-  agentRunSequence: number;       // Current/last run sequence for observability
-  displayedSkillProgress: Set<string>;  // Displayed skill progress (skillId:step) for deduplication
-  completionHandled: boolean;  // Whether analysis completion event was handled
+  bookmarks: NavigationBookmark[]; // Navigation bookmarks
+  currentTraceFingerprint: string | null; // Current Trace fingerprint
+  currentSessionId: string | null; // Current Session ID
+  isRetryingBackend: boolean; // Retrying backend connection
+  retryError: string | null; // Retry connection error message
+  agentSessionId: string | null; // Agent multi-turn dialogue Session ID
+  agentRunId: string | null; // Current/last agent run ID for observability
+  agentRequestId: string | null; // Current/last request ID for observability
+  agentRunSequence: number; // Current/last run sequence for observability
+  displayedSkillProgress: Set<string>; // Displayed skill progress (skillId:step) for deduplication
+  completionHandled: boolean; // Whether analysis completion event was handled
   // SSE Connection State (Phase 2: Reconnection Logic)
-  sseConnectionState: 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
-  sseRetryCount: number;  // Current retry attempt count
-  sseMaxRetries: number;  // Maximum retry attempts (default: 5)
-  sseLastEventTime: number | null;  // Last received event timestamp
-  sseLastEventId: number | null;  // F3: Last received SSE event sequence ID for replay on reconnect
+  sseConnectionState:
+    | 'disconnected'
+    | 'connecting'
+    | 'connected'
+    | 'reconnecting';
+  sseRetryCount: number; // Current retry attempt count
+  sseMaxRetries: number; // Maximum retry attempts (default: 5)
+  sseLastEventTime: number | null; // Last received event timestamp
+  sseLastEventId: number | null; // F3: Last received SSE event sequence ID for replay on reconnect
   // Error Aggregation (Phase 3: Error Summary Display)
   collectedErrors: Array<{
     skillId: string;
@@ -311,21 +324,21 @@ export interface AIPanelState {
     timestamp: number;
   }>;
   // Output structure optimization: track collapsed table states
-  collapsedTables: Set<string>;  // Message IDs of currently collapsed tables
+  collapsedTables: Set<string>; // Message IDs of currently collapsed tables
   // Scene Navigation Bar state
-  detectedScenes: DetectedScene[];  // Detected scenes from quick detection
-  scenesLoading: boolean;  // Loading state for scene detection
-  scenesError: string | null;  // Error message from scene detection
+  detectedScenes: DetectedScene[]; // Detected scenes from quick detection
+  scenesLoading: boolean; // Loading state for scene detection
+  scenesError: string | null; // Error message from scene detection
   // Intervention state (Agent-Driven Architecture v2.0)
   interventionState: InterventionState;
   streamingFlow: StreamingFlowState;
   streamingAnswer: StreamingAnswerState;
   // Comparison mode state
-  referenceTraceId: string | null;      // Backend trace ID of the reference trace
-  referenceTraceName: string | null;    // Display name of the reference trace
-  isReferenceActive: boolean;           // Whether Perfetto is currently showing the reference trace
-  showTracePicker: boolean;             // Whether trace picker modal is visible
-  comparisonTraceLoading: boolean;      // Loading state for reference trace processor
+  referenceTraceId: string | null; // Backend trace ID of the reference trace
+  referenceTraceName: string | null; // Display name of the reference trace
+  isReferenceActive: boolean; // Whether Perfetto is currently showing the reference trace
+  showTracePicker: boolean; // Whether trace picker modal is visible
+  comparisonTraceLoading: boolean; // Loading state for reference trace processor
   // Story Panel state — Chat ↔ Story view switch
   currentView: 'chat' | 'story';
   storyState: StoryPanelState;
@@ -333,17 +346,17 @@ export interface AIPanelState {
    *  Persisted in localStorage under ANALYSIS_MODE_KEY. */
   analysisMode: 'fast' | 'full' | 'auto';
   // Slice Selected card state
-  sliceCardInfo: SliceCardInfo | null;  // Queried slice metadata for the card
-  areaCardInfo: AreaCardInfo | null;    // Queried area metadata for the card
-  sliceCardPrevSelId: string;           // Last seen selection key for diff detection
-  sliceCardDismissed: boolean;          // Whether user dismissed the card
+  sliceCardInfo: SliceCardInfo | null; // Queried slice metadata for the card
+  areaCardInfo: AreaCardInfo | null; // Queried area metadata for the card
+  sliceCardPrevSelId: string; // Last seen selection key for diff detection
+  sliceCardDismissed: boolean; // Whether user dismissed the card
   // Pre-queried trace context to attach to next request (set by quick-action buttons)
   pendingTraceContext: TraceDataset[] | null;
 }
 
 /** A pre-queried trace dataset sent to the backend alongside the query. */
 export interface TraceDataset {
-  label: string;        // Human-readable description of the SQL
+  label: string; // Human-readable description of the SQL
   columns: string[];
   rows: unknown[][];
 }
@@ -366,7 +379,7 @@ export interface AreaCardInfo {
   durationMs: number;
   sliceCount: number;
   trackCount: number;
-  topSlices: Array<{ name: string; durMs: number; count: number }>;
+  topSlices: Array<{name: string; durMs: number; count: number}>;
   hasJank: boolean;
   jankCount: number;
 }
@@ -422,16 +435,16 @@ export interface ServerStatus {
 export interface AISession {
   sessionId: string;
   traceFingerprint: string;
-  traceName: string;              // Display name (e.g., filename)
-  backendTraceId?: string;        // Backend session ID
-  agentSessionId?: string;        // Backend Agent multi-turn session ID
-  agentRunId?: string;            // Backend run ID
-  agentRequestId?: string;        // Backend request ID
-  agentRunSequence?: number;      // Backend run sequence
+  traceName: string; // Display name (e.g., filename)
+  backendTraceId?: string; // Backend session ID
+  agentSessionId?: string; // Backend Agent multi-turn session ID
+  agentRunId?: string; // Backend run ID
+  agentRequestId?: string; // Backend request ID
+  agentRunSequence?: number; // Backend run sequence
   createdAt: number;
   lastActiveAt: number;
   messages: Message[];
-  summary?: string;               // AI-generated conversation summary
+  summary?: string; // AI-generated conversation summary
   pinnedResults?: PinnedResult[]; // Pinned query results
   bookmarks?: NavigationBookmark[]; // Navigation bookmarks
   /** Session type: 'single' for normal, 'comparison' for dual-trace analysis */
@@ -486,7 +499,12 @@ export interface PresetQuestion {
 
 export const PRESET_QUESTIONS: PresetQuestion[] = [
   // Teaching mode - helps users understand rendering pipelines
-  {label: '🎓 出图教学', question: '/teaching-pipeline', icon: 'school', isTeaching: true},
+  {
+    label: '🎓 出图教学',
+    question: '/teaching-pipeline',
+    icon: 'school',
+    isTeaching: true,
+  },
   // Scene reconstruction - understand what happened in the trace
   {label: '🎬 场景还原', question: '/scene', icon: 'movie', isScene: true},
   // Analysis mode - actual performance analysis
@@ -497,10 +515,26 @@ export const PRESET_QUESTIONS: PresetQuestion[] = [
 
 /** Preset questions for comparison mode. */
 export const COMPARISON_PRESET_QUESTIONS: PresetQuestion[] = [
-  {label: '对比滑动', question: '对比两个 Trace 的滑动性能', icon: 'compare_arrows'},
-  {label: '对比启动', question: '对比两个 Trace 的启动性能', icon: 'compare_arrows'},
-  {label: '对比帧率', question: '对比两个 Trace 的帧率分布和 Jank 情况', icon: 'compare_arrows'},
-  {label: '对比 CPU', question: '对比两个 Trace 的 CPU 调度和频率', icon: 'compare_arrows'},
+  {
+    label: '对比滑动',
+    question: '对比两个 Trace 的滑动性能',
+    icon: 'compare_arrows',
+  },
+  {
+    label: '对比启动',
+    question: '对比两个 Trace 的启动性能',
+    icon: 'compare_arrows',
+  },
+  {
+    label: '对比帧率',
+    question: '对比两个 Trace 的帧率分布和 Jank 情况',
+    icon: 'compare_arrows',
+  },
+  {
+    label: '对比 CPU',
+    question: '对比两个 Trace 的 CPU 调度和频率',
+    icon: 'compare_arrows',
+  },
 ];
 
 // =============================================================================
