@@ -1060,16 +1060,6 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
           onclick: () => this.openSettings(),
         }),
       ]),
-      isDockedSidebar
-        ? m(
-            'button.ai-header-close-btn',
-            {
-              title: '关闭 AI Assistant',
-              onclick: () => switchFloatingMode('tab'),
-            },
-            m('i.pf-icon', 'close'),
-          )
-        : null,
     ]);
   }
 
@@ -1117,19 +1107,19 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
         'button',
         {
           class: layout === 'right' ? 'active' : '',
-          title: '横屏模式：AI Assistant 显示在 Timeline 右侧',
+          title: 'Right: AI Assistant 显示在 Timeline 右侧',
           onclick: () => setLayout('right'),
         },
-        '横屏',
+        'Right',
       ),
       m(
         'button',
         {
           class: layout === 'bottom' ? 'active' : '',
-          title: '竖屏模式：AI Assistant 显示在 Timeline 底部',
+          title: 'Bottom: AI Assistant 显示在 Timeline 底部',
           onclick: () => setLayout('bottom'),
         },
-        '竖屏',
+        'Bottom',
       ),
     ]);
   }

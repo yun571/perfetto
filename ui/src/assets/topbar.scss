@@ -34,7 +34,7 @@
 
   &__error-box {
     position: absolute;
-    right: 62px;
+    right: 132px;
     display: flex;
     align-items: center;
     font-size: var(--pf-font-size-xxl);
@@ -48,10 +48,11 @@
   }
 
   &__ai-entry {
-    min-width: 46px;
-    height: 32px;
+    min-width: 112px;
+    height: 34px;
+    padding: 0 16px;
     border: 1px solid color-mix(in srgb, var(--pf-color-primary) 35%, transparent);
-    border-radius: 18px;
+    border-radius: 19px;
     background: var(--pf-color-background);
     color: var(--pf-color-primary);
     font-weight: 700;
