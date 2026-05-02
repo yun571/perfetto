@@ -34,6 +34,23 @@ import {locateFloatingWindow, setupFloatingWindow} from './ai_floating_window';
 import {getFloatingState, toggleSidebarCollapsed, updateFloatingState} from './ai_floating_state';
 import {resetTransientState, switchFloatingMode} from './ai_transient_state';
 
+function toggleSidebarPanel(): void {
+  if (!isTimelineRouteActive()) return;
+  const state = getFloatingState();
+  if (state.mode === 'floating') {
+    // Keep floating windows discoverable instead of silently hiding them.
+    locateFloatingWindow();
+  } else if (state.mode === 'sidebar') {
+    if (state.sidebar.collapsed) {
+      toggleSidebarCollapsed();
+    } else {
+      switchFloatingMode('tab');
+    }
+  } else {
+    switchFloatingMode('sidebar');
+  }
+}
+
 export default class implements PerfettoPlugin {
   static readonly id = 'com.smartperfetto.AIAssistant';
 
@@ -42,18 +59,7 @@ export default class implements PerfettoPlugin {
       id: 'com.smartperfetto.AIAssistant.OpenPanel',
       name: 'Open AI Assistant',
       callback: () => {
-        if (!isTimelineRouteActive()) return;
-        const mode = getFloatingState().mode;
-        if (mode === 'floating') {
-          // Locate+flash the popup (handles off-screen + inattentional blindness).
-          locateFloatingWindow();
-        } else if (mode === 'sidebar') {
-          // If collapsed, expand; if already expanded, no-op.
-          const s = getFloatingState();
-          if (s.sidebar.collapsed) toggleSidebarCollapsed();
-        } else {
-          switchFloatingMode('sidebar');
-        }
+        toggleSidebarPanel();
       },
     });
 
@@ -150,16 +156,7 @@ export default class implements PerfettoPlugin {
           icon: 'smart_toy',
           intent: intents[state.status] ?? Intent.None,
           onclick: () => {
-            if (!isTimelineRouteActive()) return;
-            const mode = getFloatingState().mode;
-            if (mode === 'floating') {
-              locateFloatingWindow();
-            } else if (mode === 'sidebar') {
-              const s = getFloatingState();
-              if (s.sidebar.collapsed) toggleSidebarCollapsed();
-            } else {
-              switchFloatingMode('sidebar');
-            }
+            toggleSidebarPanel();
           },
         };
       },

@@ -488,30 +488,6 @@
   }
 }
 
-.ai-header-close-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 2px;
-  background: var(--pf-color-surface-container-highest, #424b5a);
-  border: none;
-  border-radius: 6px;
-  color: var(--pf-color-on-surface, #d8dde5);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.15s ease;
-
-  .pf-icon {
-    font-size: 18px !important;
-  }
-
-  &:hover {
-    filter: brightness(1.08);
-  }
-}
-
 // The docked right panel defaults to a narrow width. Keep all function
 // groups on one row by collapsing labels while retaining the grouped
 // backgrounds that separate analysis/session/window actions.
@@ -582,15 +558,6 @@
     }
   }
 
-  .ai-header-close-btn {
-    width: 24px;
-    height: 24px;
-    border-radius: 5px;
-
-    .pf-icon {
-      font-size: 16px !important;
-    }
-  }
 }
 
 // ----------------------------------------------------------------------------

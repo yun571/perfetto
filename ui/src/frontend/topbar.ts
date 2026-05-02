@@ -109,7 +109,7 @@ export class Topbar implements m.ClassComponent<TopbarAttrs> {
             commands.runCommand(AI_ASSISTANT_OPEN_COMMAND);
           },
         },
-        'AI',
+        'AI Assistant',
       ),
     );
   }
