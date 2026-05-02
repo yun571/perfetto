@@ -193,6 +193,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: 4px 8px;
   min-height: 28px;
   border-bottom: 1px solid var(--chat-border);
@@ -204,6 +205,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .ai-header-icon {
@@ -267,6 +269,7 @@
 .ai-status-text {
   font-size: 11px;
   color: var(--chat-text-secondary);
+  white-space: nowrap;
 
   &.backend {
     font-size: 10px;
@@ -274,14 +277,13 @@
   }
 }
 
-// Preset question buttons in header
+// Preset question buttons, now hosted in the input bar control row.
 .ai-preset-questions {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: 8px;
-  padding-left: 8px;
-  border-left: 1px solid var(--chat-border);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .ai-preset-btn {
@@ -371,25 +373,65 @@
   }
 }
 
-.ai-header-right {
+.ai-header-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+  flex-shrink: 0;
 }
 
-.ai-icon-btn {
-  width: 24px;
-  height: 24px;
+.ai-header-action-group {
   display: flex;
   align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 2px 5px;
+  border: 1px solid var(--chat-border);
+  border-radius: 8px;
+  background: var(--chat-bg-secondary);
+  flex-shrink: 0;
+
+  &--analysis {
+    background: tint(var(--pf-color-accent), 6%);
+  }
+
+  &--session {
+    background: tint(var(--chat-success), 7%);
+  }
+
+  &--window {
+    background: tint(var(--pf-color-primary), 8%);
+  }
+}
+
+.ai-header-action-group-label {
+  color: var(--chat-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0 3px;
+  white-space: nowrap;
+}
+
+.ai-header-icon-btn {
+  min-width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  gap: 3px;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: 5px;
   color: var(--chat-text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
-  padding: 0;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 
   .pf-icon {
     font-size: 16px !important;
@@ -408,6 +450,146 @@
   &.uploading {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  &--readonly {
+    cursor: default;
+
+    &:hover {
+      background: transparent;
+      color: var(--chat-text-secondary);
+    }
+  }
+}
+
+.ai-header-layout-switch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--chat-bg-tertiary);
+
+  button {
+    height: 20px;
+    border: 0;
+    border-radius: 999px;
+    padding: 0 7px;
+    background: transparent;
+    color: var(--chat-text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+
+    &.active {
+      background: var(--pf-color-primary, #3d5688);
+      color: var(--pf-color-text-on-primary, #fff);
+    }
+  }
+}
+
+.ai-header-close-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+  background: var(--pf-color-surface-container-highest, #424b5a);
+  border: none;
+  border-radius: 6px;
+  color: var(--pf-color-on-surface, #d8dde5);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+
+  .pf-icon {
+    font-size: 18px !important;
+  }
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+}
+
+// The docked right panel defaults to a narrow width. Keep all function
+// groups on one row by collapsing labels while retaining the grouped
+// backgrounds that separate analysis/session/window actions.
+.ai-sidebar-expanded {
+  container-type: inline-size;
+}
+
+@container (max-width: 520px) {
+  .ai-header {
+    gap: 4px;
+    padding: 4px 6px;
+  }
+
+  .ai-header-left {
+    gap: 4px;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .ai-header-title {
+    font-size: 11px;
+  }
+
+  .ai-status-text:not(.backend) {
+    display: none;
+  }
+
+  .ai-status-text.backend {
+    font-size: 10px;
+  }
+
+  .ai-header-actions {
+    gap: 3px;
+  }
+
+  .ai-header-action-group {
+    gap: 2px;
+    min-height: 26px;
+    padding: 2px 3px;
+    border-radius: 7px;
+  }
+
+  .ai-header-action-group-label {
+    display: none;
+  }
+
+  .ai-header-icon-btn {
+    min-width: 21px;
+    height: 22px;
+    padding: 0 3px;
+
+    > span {
+      display: none;
+    }
+
+    .pf-icon {
+      font-size: 15px !important;
+    }
+  }
+
+  .ai-header-layout-switch {
+    padding: 1px;
+
+    button {
+      height: 20px;
+      padding: 0 5px;
+      font-size: 10px;
+    }
+  }
+
+  .ai-header-close-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+
+    .pf-icon {
+      font-size: 16px !important;
+    }
   }
 }
 
@@ -1015,53 +1197,15 @@
   flex-shrink: 0;
 }
 
-// Analysis mode selector (fast / full / auto) — renders above the input wrapper.
-.ai-mode-chips {
-  display: flex;
-  gap: 4px;
-  padding: 0 4px 4px;
-  flex-wrap: wrap;
-}
-
-.ai-mode-chip {
-  padding: 2px 10px;
-  font-size: 11px;
-  line-height: 18px;
-  color: var(--chat-text-muted);
-  background: transparent;
-  border: 1px solid var(--chat-border);
-  border-radius: 12px;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
-
-  &:hover:not(:disabled):not(.active) {
-    border-color: var(--chat-primary);
-    color: var(--chat-text);
-  }
-
-  &.active {
-    background: var(--chat-primary-light);
-    color: var(--chat-primary);
-    border-color: var(--chat-primary);
-    font-weight: 500;
-  }
-
-  &.disabled,
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
 .ai-input-container,
 .ai-input-wrapper {
+  position: relative;
   display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  padding: 4px 4px 4px 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-height: 78px;
+  padding: 8px 4px 4px 12px;
   background: var(--chat-bg-secondary);
   border: 1px solid var(--chat-border);
   border-radius: 6px;
@@ -1073,18 +1217,127 @@
   }
 }
 
-.ai-input {
+.ai-input-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ai-input-control-spacer {
   flex: 1;
-  min-height: 20px;
-  max-height: 100px;
-  padding: 4px 0;
+  min-width: 12px;
+}
+
+.ai-mode-selector {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ai-mode-trigger {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 6px;
+  color: var(--chat-text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: var(--chat-bg-tertiary);
+    color: var(--chat-text);
+  }
+
+  .pf-icon {
+    font-size: 15px;
+  }
+}
+
+.ai-mode-trigger-icon {
+  font-size: 13px;
+}
+
+.ai-mode-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  min-width: 126px;
+  padding: 4px;
+  border: 1px solid var(--chat-border);
+  border-radius: 8px;
+  background: var(--chat-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.ai-mode-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--chat-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover:not(:disabled):not(.active) {
+    background: var(--chat-bg-secondary);
+  }
+
+  &.active {
+    background: var(--chat-primary-light);
+    color: var(--chat-primary);
+    font-weight: 600;
+  }
+
+  &.disabled,
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .pf-icon {
+    margin-left: auto;
+    font-size: 14px;
+  }
+}
+
+.ai-mode-menu-icon {
+  width: 16px;
+  text-align: center;
+}
+
+.ai-mode-menu-label {
+  white-space: nowrap;
+}
+
+.ai-input {
+  width: 100%;
+  min-height: 38px;
+  max-height: 180px;
+  padding: 2px 4px 4px 0;
   border: none;
   background: transparent;
   color: var(--chat-text);
   font-family: inherit;
   font-size: 13px;
   line-height: 1.4;
-  resize: none;
+  resize: vertical;
   outline: none;
 
   &::placeholder {
@@ -2373,6 +2626,63 @@
   padding: 4px 0;
 }
 
+.ai-story-sidebar {
+  width: min(420px, 48%);
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--chat-bg);
+  border-left: 1px solid var(--chat-border);
+  box-shadow: -4px 0 14px rgba(0, 0, 0, 0.08);
+}
+
+.ai-story-sidebar-header {
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--chat-border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--chat-text);
+
+  .pf-icon {
+    font-size: 16px;
+    color: var(--chat-text-secondary);
+  }
+}
+
+.ai-story-sidebar-close {
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--chat-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--chat-bg-secondary);
+    color: var(--chat-text);
+  }
+
+  .pf-icon {
+    font-size: 16px;
+  }
+}
+
+.ai-story-sidebar-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .ai-session-sidebar-item {
   display: flex;
   align-items: flex-start;
@@ -3127,17 +3437,20 @@ tr.detail-row {
 
 .scene-nav-bar {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 12px;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
   background: var(--chat-bg-secondary);
   border-bottom: 1px solid var(--chat-border);
+  min-height: 42px;
 }
 
 .scene-nav-header {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 0 0 auto;
+  min-width: 148px;
 }
 
 .scene-nav-label {
@@ -3173,8 +3486,15 @@ tr.detail-row {
 
 // @keyframes spin — already defined at top of file (line ~1081)
 
+.scene-nav-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
 .scene-nav-refresh {
-  margin-left: auto;
+  flex: 0 0 auto;
   padding: 4px;
   background: transparent;
   border: none;
@@ -3202,6 +3522,8 @@ tr.detail-row {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .scene-nav-arrow {
@@ -3308,12 +3630,16 @@ tr.detail-row {
   font-size: 11px;
   color: var(--chat-text-muted);
   font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 // =============================================================================
 // Comparison Mode
 // =============================================================================
 
+.ai-header-icon-btn.active,
 .ai-icon-btn.active {
   color: var(--pf-color-accent);
   background: tint(var(--pf-color-accent), 10%);
@@ -3405,10 +3731,77 @@ tr.detail-row {
   }
 }
 
-// Trace Picker Modal
+// Trace Picker Drawer
+.ai-trace-picker-sidebar {
+  width: min(420px, 48%);
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--chat-bg);
+  border-left: 1px solid var(--chat-border);
+  box-shadow: -4px 0 14px rgba(0, 0, 0, 0.08);
+}
+
+.ai-trace-picker-sidebar-header {
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--chat-border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--chat-text);
+
+  .pf-icon {
+    font-size: 16px;
+    color: var(--chat-text-secondary);
+  }
+}
+
+.ai-trace-picker-sidebar-close {
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--chat-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--chat-bg-secondary);
+    color: var(--chat-text);
+  }
+
+  .pf-icon {
+    font-size: 16px;
+  }
+}
+
+.ai-trace-picker-sidebar-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-trace-picker-sidebar-actions {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--chat-border);
+}
+
 .ai-trace-picker {
-  max-width: 480px;
-  width: 90%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
 }
 
 .ai-trace-picker-loading {
@@ -3418,13 +3811,14 @@ tr.detail-row {
 }
 
 .ai-trace-picker-list {
-  padding: 4px;
-  max-height: 300px;
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
   overflow-y: auto;
 }
 
 .ai-trace-picker-item {
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s;
@@ -3443,9 +3837,7 @@ tr.detail-row {
   font-size: 13px;
   font-weight: 500;
   color: var(--chat-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .ai-trace-picker-item-meta {
@@ -3681,7 +4073,7 @@ tr.detail-row {
 // Collapsed strip — 36px vertical bar on the right edge.
 .ai-sidebar-collapsed {
   position: fixed;
-  top: 0;
+  top: var(--topbar-height);
   right: 0;
   bottom: 0;
   width: 36px;
@@ -3731,20 +4123,33 @@ tr.detail-row {
 // Expanded panel — full sidebar with titlebar, content, resize handle.
 .ai-sidebar-expanded {
   position: fixed;
-  top: 0;
   right: 0;
-  bottom: 0;
   z-index: 80;
   display: flex;
   flex-direction: column;
   background: var(--pf-color-background, #ffffff);
-  box-shadow:
-    -4px 0 16px rgba(0, 0, 0, 0.12),
-    -1px 0 0 rgba(0, 0, 0, 0.06);
   // The .ai-panel token cascade is needed because AIPanel renders inside here.
   // The sidebar expanded root also acts as .ai-panel's ancestor for CSS variable
   // resolution, but AIPanel already self-injects its tokens on .ai-panel, so no
   // extra variables are needed here.
+
+  &--right {
+    top: var(--topbar-height);
+    bottom: var(--pf-statusbar-height, 0px);
+    box-shadow:
+      -4px 0 16px rgba(0, 0, 0, 0.12),
+      -1px 0 0 rgba(0, 0, 0, 0.06);
+  }
+
+  &--bottom {
+    left: var(--sidebar-width, 0);
+    bottom: var(--pf-statusbar-height, 0px);
+    width: auto;
+    border-top: 1px solid var(--pf-color-border, #cfd4d9);
+    box-shadow:
+      0 -2px 8px rgba(0, 0, 0, 0.08),
+      0 -1px 0 rgba(0, 0, 0, 0.04);
+  }
 }
 
 .ai-sidebar-titlebar {
@@ -3766,7 +4171,7 @@ tr.detail-row {
   &__text {
     font-size: 13px;
     font-weight: 500;
-    flex: 1;
+    flex: 0 0 auto;
     letter-spacing: 0.2px;
   }
 
@@ -3783,6 +4188,32 @@ tr.detail-row {
   }
 }
 
+.ai-sidebar-layout-switch {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+
+  button {
+    border: 0;
+    border-radius: 999px;
+    padding: 2px 8px;
+    background: transparent;
+    color: var(--pf-sidebar-on-surface, #c8c8c8);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &.active {
+      background: var(--pf-color-primary, #3d5688);
+      color: white;
+    }
+  }
+}
+
 .ai-sidebar-content {
   flex: 1;
   overflow: hidden;
@@ -3793,17 +4224,38 @@ tr.detail-row {
 // Left-edge resize handle — thin drag strip for adjusting sidebar width.
 .ai-sidebar-resize-handle {
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  cursor: col-resize;
   z-index: 1;
   // Invisible by default; highlight on hover for discoverability.
-  transition: background 0.15s;
+  background: transparent;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
 
-  &:hover,
-  &:active {
-    background: var(--pf-color-primary, #3d5688);
+  &--right {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    cursor: col-resize;
+
+    &:hover,
+    &:active {
+      background: rgba(95, 99, 104, 0.18);
+      box-shadow: inset 1px 0 0 rgba(95, 99, 104, 0.28);
+    }
+  }
+
+  &--bottom {
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 4px;
+    cursor: row-resize;
+
+    &:hover,
+    &:active {
+      background: rgba(95, 99, 104, 0.18);
+      box-shadow: inset 0 1px 0 rgba(95, 99, 104, 0.28);
+    }
   }
 }

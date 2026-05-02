@@ -41,7 +41,9 @@
 import {
   FloatingMode,
   clampFloatingGeometryToViewport,
+  clampSidebarHeight,
   clampSidebarWidth,
+  getFloatingState,
   updateFloatingState,
 } from './ai_floating_state';
 import {StreamingAnswerState, StreamingFlowState} from './types';
@@ -196,7 +198,12 @@ export function switchFloatingMode(newMode: FloatingMode): void {
   // Clamp sidebar width to viewport ratio on entry — a width saved on a
   // 4K monitor would overflow the sidebar on a smaller viewport otherwise.
   if (newMode === 'sidebar') {
-    clampSidebarWidth();
+    const layout = getFloatingState().sidebar.layout;
+    if (layout === 'bottom') {
+      clampSidebarHeight();
+    } else {
+      clampSidebarWidth();
+    }
   }
   updateFloatingState({mode: newMode});
 }

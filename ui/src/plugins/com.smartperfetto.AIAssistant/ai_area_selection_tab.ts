@@ -13,7 +13,7 @@
  *   1. **Quick stats** — instant SQL queries for the selected range (slice
  *      count, avg/max duration, frame/jank counts if available). No AI needed.
  *   2. **"Deep Analyze with AI"** — sets pendingSelectionAnalysis in shared
- *      state, opens AI tab, auto-triggers analysis scoped to the selection.
+ *      state, opens the AI dock, auto-triggers analysis scoped to the selection.
  */
 
 import m from 'mithril';
@@ -23,6 +23,7 @@ import {Icon} from '../../widgets/icon';
 import {NUM, NUM_NULL} from '../../trace_processor/query_result';
 import {updateAISharedState, getAISharedState} from './ai_shared_state';
 import {formatDurationAuto} from './renderers/formatters';
+import {switchFloatingMode} from './ai_transient_state';
 
 // ── Quick-stats data structures ─────────────────────────────────────────
 
@@ -173,7 +174,7 @@ export function createAIAreaSelectionTab(trace: Trace): AreaSelectionTab {
         trackUris: [...sel.trackUris],
       },
     });
-    trace.tabs.showTab('ai-assistant');
+    switchFloatingMode('sidebar');
   }
 
   return {

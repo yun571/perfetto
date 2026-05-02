@@ -34,6 +34,7 @@
  */
 
 import m from 'mithril';
+import {isTimelineRouteActive} from '../../frontend/timeline_route';
 import {Trace} from '../../public/trace';
 import {Icon} from '../../widgets/icon';
 import {AIPanel} from './ai_panel';
@@ -41,11 +42,13 @@ import {
   applyFloatingSnapLayout,
   clamp,
   clampFloatingGeometryToViewport,
+  clampSidebarHeight,
   clampSidebarWidth,
   FLOATING_SNAP_LAYOUTS,
   FloatingState,
   FLOATING_MIN_HEIGHT,
   FLOATING_MIN_WIDTH,
+  getEffectiveSidebarHeight,
   getEffectiveSidebarWidth,
   getFloatingState,
   resetFloatingGeometry,
@@ -396,8 +399,8 @@ class FloatingWindow implements m.ClassComponent<FloatingWindowAttrs> {
         ]),
         m('button', {
           style: STYLES.iconBtn,
-          title: '收回到标签页',
-          onclick: () => switchFloatingMode('tab'),
+          title: '收回到 AI Dock',
+          onclick: () => switchFloatingMode('sidebar'),
           onmouseover: (e: MouseEvent) => {
             (e.currentTarget as HTMLElement).style.background = BTN_BG_HOVER;
           },
@@ -406,7 +409,7 @@ class FloatingWindow implements m.ClassComponent<FloatingWindowAttrs> {
           },
         }, [
           m(Icon, {icon: 'close_fullscreen', style: 'font-size: 14px'}),
-          m('span', '收回'),
+          m('span', 'Dock'),
         ]),
       ]),
 
@@ -532,25 +535,46 @@ function createHostDiv(): HTMLDivElement {
   return div;
 }
 
-// ── Right-rail CSS variable (sidebar margin push) ──────────────────────
+// ── Dock CSS variables (sidebar/bottom margin push) ────────────────────
 // The core layout rule `.pf-ui-main__page-container { margin-right:
 // var(--pf-right-rail-width, 0px) }` responds to this variable. Setting it
 // causes only the page area to shrink — topbar and statusbar stay full-width.
 
 const RIGHT_RAIL_VAR = '--pf-right-rail-width';
+const BOTTOM_RAIL_VAR = '--pf-bottom-rail-height';
+const STATUSBAR_HEIGHT_VAR = '--pf-statusbar-height';
 
-function syncRightRailWidth(): void {
+function getStatusbarHeight(): number {
+  const statusbar = document.querySelector('.pf-statusbar');
+  return statusbar instanceof HTMLElement
+    ? Math.ceil(statusbar.getBoundingClientRect().height)
+    : 0;
+}
+
+function syncDockSpace(): void {
   const s = getFloatingState();
-  if (s.mode === 'sidebar') {
-    const w = getEffectiveSidebarWidth();
-    document.documentElement.style.setProperty(RIGHT_RAIL_VAR, `${w}px`);
+  if (s.mode === 'sidebar' && isTimelineRouteActive()) {
+    document.documentElement.style.setProperty(
+      STATUSBAR_HEIGHT_VAR,
+      `${getStatusbarHeight()}px`,
+    );
+    document.documentElement.style.setProperty(
+      RIGHT_RAIL_VAR,
+      `${getEffectiveSidebarWidth()}px`,
+    );
+    document.documentElement.style.setProperty(
+      BOTTOM_RAIL_VAR,
+      `${getEffectiveSidebarHeight()}px`,
+    );
   } else {
-    clearRightRailWidth();
+    clearDockSpace();
   }
 }
 
-function clearRightRailWidth(): void {
+function clearDockSpace(): void {
   document.documentElement.style.removeProperty(RIGHT_RAIL_VAR);
+  document.documentElement.style.removeProperty(BOTTOM_RAIL_VAR);
+  document.documentElement.style.removeProperty(STATUSBAR_HEIGHT_VAR);
 }
 
 /**
@@ -578,6 +602,7 @@ export function setupFloatingWindow(trace: Trace): FloatingWindowHandle {
   // AIPanel instance invariant is preserved.
   const FloatingRoot: m.Component = {
     view: () => {
+      if (!isTimelineRouteActive()) return null;
       const mode = getFloatingState().mode;
       if (mode === 'floating') return m(FloatingWindow, {trace});
       if (mode === 'sidebar') return m(SidebarPanel, {trace});
@@ -593,11 +618,11 @@ export function setupFloatingWindow(trace: Trace): FloatingWindowHandle {
   // updateFloatingState bursts from drag/resize gestures collapse to one
   // redraw per frame.
   const unsubscribeState = subscribeFloatingState(() => {
-    syncRightRailWidth();
+    syncDockSpace();
     m.redraw();
   });
   // Run once on setup so the CSS variable is correct for the initial mode.
-  syncRightRailWidth();
+  syncDockSpace();
 
   // Re-render when the viewport resizes — clamp current geometry in case
   // the window is now partially or fully off-screen, or sidebar is too wide.
@@ -610,10 +635,19 @@ export function setupFloatingWindow(trace: Trace): FloatingWindowHandle {
         size,
       });
     } else if (s.mode === 'sidebar') {
-      clampSidebarWidth();
+      if (s.sidebar.layout === 'bottom') {
+        clampSidebarHeight();
+      } else {
+        clampSidebarWidth();
+      }
     }
   };
   window.addEventListener('resize', onResize);
+  const onRouteChange = (): void => {
+    syncDockSpace();
+    m.redraw();
+  };
+  window.addEventListener('hashchange', onRouteChange);
 
   // Deliberately no Esc shortcut. We explored binding Esc on document,
   // but Perfetto has many widgets that listen for Escape on document
@@ -636,6 +670,7 @@ export function setupFloatingWindow(trace: Trace): FloatingWindowHandle {
     dispose: () => {
       unsubscribeState();
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('hashchange', onRouteChange);
       // Tear down any in-flight drag/resize gesture — if the trace unloads
       // mid-drag, the document-level mousemove/mouseup listeners would
       // otherwise leak into the next trace session (Codex MEDIUM 2).
@@ -644,7 +679,7 @@ export function setupFloatingWindow(trace: Trace): FloatingWindowHandle {
       }
       // Release the right-rail CSS variable so the page container returns
       // to full width. Must happen before mode reset to avoid a flash.
-      clearRightRailWidth();
+      clearDockSpace();
       // Force mode back to tab so any pending render won't recreate UI
       updateFloatingState({mode: 'tab'});
       // m.mount(el, null) is Mithril's official unmount path — tears down

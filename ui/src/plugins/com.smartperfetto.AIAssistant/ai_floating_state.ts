@@ -24,8 +24,20 @@ export interface FloatingState {
   /** Window size in pixels. */
   size: {width: number; height: number};
   /** Right-sidebar geometry. Persisted to localStorage separately from mode. */
-  sidebar: {width: number; collapsed: boolean};
+  sidebar: {
+    width: number;
+    height: number;
+    collapsed: boolean;
+    layout: 'right' | 'bottom';
+  };
 }
+
+type FloatingStateUpdate =
+  Partial<Omit<FloatingState, 'position' | 'size' | 'sidebar'>> & {
+    position?: Partial<FloatingState['position']>;
+    size?: Partial<FloatingState['size']>;
+    sidebar?: Partial<FloatingState['sidebar']>;
+  };
 
 export const FLOATING_MIN_WIDTH = 400;
 export const FLOATING_MIN_HEIGHT = 320;
@@ -40,8 +52,12 @@ const FALLBACK_VIEWPORT_HEIGHT = 800;
 export const SIDEBAR_DEFAULT_WIDTH = 400;
 export const SIDEBAR_MIN_WIDTH = 300;
 export const SIDEBAR_COLLAPSED_WIDTH = 36;
+export const SIDEBAR_DEFAULT_HEIGHT = 360;
+export const SIDEBAR_MIN_HEIGHT = 260;
+export const SIDEBAR_COLLAPSED_HEIGHT = 40;
 /** Never consume more than this fraction of the viewport for the sidebar. */
 const SIDEBAR_MAX_WIDTH_RATIO = 0.5;
+const SIDEBAR_MAX_HEIGHT_RATIO = 0.6;
 
 /** Clamp a value to [min, max]. Exported so the window module can reuse it. */
 export function clamp(value: number, min: number, max: number): number {
@@ -73,7 +89,12 @@ function defaultState(): FloatingState {
   return {
     mode: 'tab',
     ...computeDefaultGeometry(viewportW, viewportH),
-    sidebar: {width: SIDEBAR_DEFAULT_WIDTH, collapsed: false},
+    sidebar: {
+      width: SIDEBAR_DEFAULT_WIDTH,
+      height: SIDEBAR_DEFAULT_HEIGHT,
+      collapsed: false,
+      layout: 'right',
+    },
   };
 }
 
@@ -83,7 +104,7 @@ function loadFromStorage(): FloatingState | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return null;
+    if (parsed === null || typeof parsed !== 'object') return null;
     // Always reset mode to 'tab' on load — never auto-restore the floating
     // window or sidebar across page reloads, that would be surprising.
     // Validate position — corrupt/NaN/Infinity values from storage would
@@ -105,7 +126,12 @@ function loadFromStorage(): FloatingState | null {
           Number(parsed.sidebar?.width ?? SIDEBAR_DEFAULT_WIDTH),
           SIDEBAR_MIN_WIDTH, FLOATING_MAX_DIM,
         ),
+        height: clamp(
+          Number(parsed.sidebar?.height ?? SIDEBAR_DEFAULT_HEIGHT),
+          SIDEBAR_MIN_HEIGHT, FLOATING_MAX_DIM,
+        ),
         collapsed: Boolean(parsed.sidebar?.collapsed ?? false),
+        layout: parsed.sidebar?.layout === 'bottom' ? 'bottom' : 'right',
       },
     };
   } catch {
@@ -138,7 +164,7 @@ export function getFloatingState(): Readonly<FloatingState> {
 }
 
 /** Merge a partial update and notify subscribers. */
-export function updateFloatingState(update: Partial<FloatingState>): void {
+export function updateFloatingState(update: FloatingStateUpdate): void {
   state = {
     ...state,
     ...update,
@@ -372,5 +398,24 @@ export function clampSidebarWidth(): void {
 
 /** Effective pixel width of the sidebar (accounting for collapsed state). */
 export function getEffectiveSidebarWidth(): number {
+  if (state.sidebar.layout !== 'right') return 0;
   return state.sidebar.collapsed ? SIDEBAR_COLLAPSED_WIDTH : state.sidebar.width;
+}
+
+export function clampSidebarHeight(): void {
+  if (typeof window === 'undefined') return;
+  const maxH = Math.floor(window.innerHeight * SIDEBAR_MAX_HEIGHT_RATIO);
+  const clamped = clamp(
+    state.sidebar.height,
+    SIDEBAR_MIN_HEIGHT,
+    Math.max(SIDEBAR_MIN_HEIGHT, maxH),
+  );
+  if (clamped !== state.sidebar.height) {
+    updateFloatingState({sidebar: {...state.sidebar, height: clamped}});
+  }
+}
+
+export function getEffectiveSidebarHeight(): number {
+  if (state.sidebar.layout !== 'bottom') return 0;
+  return state.sidebar.collapsed ? SIDEBAR_COLLAPSED_HEIGHT : state.sidebar.height;
 }

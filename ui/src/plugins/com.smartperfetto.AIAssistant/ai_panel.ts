@@ -108,6 +108,12 @@ import {
   switchFloatingMode,
   unregisterTransientSaver,
 } from './ai_transient_state';
+import {
+  clampSidebarHeight,
+  clampSidebarWidth,
+  getFloatingState,
+  updateFloatingState,
+} from './ai_floating_state';
 
 const DEBUG_AI_PANEL = false;
 
@@ -232,8 +238,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     isReferenceActive: false,
     showTracePicker: false,
     comparisonTraceLoading: false,
-    // Story Panel (Chat ↔ Story view switch)
-    currentView: 'chat',
+    // Story Panel
     storyState: createStoryPanelState(),
     // Analysis mode (persisted in localStorage under 'ai-analysis-mode'; default 'auto')
     analysisMode: (() => {
@@ -246,6 +251,9 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       }
       return 'auto';
     })(),
+    showAnalysisModeMenu: false,
+    showSessionSidebar: false,
+    showStorySidebar: false,
     // Slice Selected card
     sliceCardInfo: null,
     areaCardInfo: null,
@@ -965,6 +973,167 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     }
   }
 
+  private renderHeaderActions(
+    isInRpcMode: boolean,
+    hasBackendTrace: boolean,
+  ): m.Children {
+    const floatingState = getFloatingState();
+    const isDockedSidebar = floatingState.mode === 'sidebar';
+
+    return m('div.ai-header-actions', [
+      m('div.ai-header-action-group.ai-header-action-group--analysis', [
+        m('span.ai-header-action-group-label', '分析'),
+        isInRpcMode && hasBackendTrace
+          ? this.renderHeaderIconButton({
+              icon: 'compare_arrows',
+              title: this.state.referenceTraceId
+                ? `对比模式: ${this.state.referenceTraceName || 'Reference Trace'}`
+                : '对比...',
+              active: !!this.state.referenceTraceId || this.state.showTracePicker,
+              onclick: () => {
+                this.state.showTracePicker = true;
+                this.state.showSessionSidebar = false;
+                this.state.showStorySidebar = false;
+                this.fetchAvailableTraces();
+                m.redraw();
+              },
+            })
+          : null,
+        // Connection status indicator (read-only, no upload button in auto-RPC mode).
+        m(
+          'span.ai-header-icon-btn.ai-header-icon-btn--readonly',
+          {
+            title: isInRpcMode
+              ? 'Connected to AI backend'
+              : 'AI backend not connected',
+          },
+          m('i.pf-icon', isInRpcMode ? 'cloud_done' : 'cloud_off'),
+        ),
+        this.renderHeaderIconButton({
+          icon: 'movie',
+          title: this.state.showStorySidebar ? '隐藏 Story' : 'Story',
+          active: this.state.showStorySidebar,
+          onclick: () => {
+            this.state.showStorySidebar = !this.state.showStorySidebar;
+            if (this.state.showStorySidebar) {
+              this.state.showSessionSidebar = false;
+              this.state.showTracePicker = false;
+            }
+            m.redraw();
+          },
+        }),
+      ]),
+      m('div.ai-header-action-group.ai-header-action-group--session', [
+        m('span.ai-header-action-group-label', '会话'),
+        this.renderHeaderIconButton({
+          icon: 'add_comment',
+          title: 'New Chat',
+          onclick: () => this.clearChat(),
+        }),
+        this.renderHeaderIconButton({
+          icon: 'forum',
+          title: this.state.showSessionSidebar ? '隐藏历史对话' : '历史对话',
+          active: this.state.showSessionSidebar,
+          onclick: () => {
+            this.state.showSessionSidebar = !this.state.showSessionSidebar;
+            if (this.state.showSessionSidebar) {
+              this.state.showStorySidebar = false;
+              this.state.showTracePicker = false;
+            }
+            m.redraw();
+          },
+        }),
+      ]),
+      m('div.ai-header-action-group.ai-header-action-group--window', [
+        m('span.ai-header-action-group-label', '窗口'),
+        isDockedSidebar ? this.renderSidebarLayoutSwitch(floatingState.sidebar.layout) : null,
+        isDockedSidebar
+          ? this.renderHeaderIconButton({
+              icon: 'open_in_new',
+              title: '弹出为浮动窗口（可拖动、可调整大小、跨标签页保持可见）',
+              onclick: () => this.popOutToFloatingWindow(),
+            })
+          : null,
+        this.renderHeaderIconButton({
+          icon: 'settings',
+          title: 'Settings',
+          onclick: () => this.openSettings(),
+        }),
+      ]),
+      isDockedSidebar
+        ? m(
+            'button.ai-header-close-btn',
+            {
+              title: '关闭 AI Assistant',
+              onclick: () => switchFloatingMode('tab'),
+            },
+            m('i.pf-icon', 'close'),
+          )
+        : null,
+    ]);
+  }
+
+  private renderHeaderIconButton(attrs: {
+    icon: string;
+    title: string;
+    onclick: () => void;
+    active?: boolean;
+    label?: string;
+  }): m.Children {
+    return m(
+      'button.ai-header-icon-btn',
+      {
+        title: attrs.title,
+        onclick: attrs.onclick,
+        class: attrs.active ? 'active' : '',
+      },
+      [
+        m('i.pf-icon', attrs.icon),
+        attrs.label ? m('span', attrs.label) : null,
+      ],
+    );
+  }
+
+  private renderSidebarLayoutSwitch(layout: 'right' | 'bottom'): m.Children {
+    const setLayout = (next: 'right' | 'bottom') => {
+      const s = getFloatingState();
+      updateFloatingState({
+        sidebar: {
+          ...s.sidebar,
+          layout: next,
+          collapsed: false,
+        },
+      });
+      if (next === 'bottom') {
+        clampSidebarHeight();
+      } else {
+        clampSidebarWidth();
+      }
+      m.redraw();
+    };
+
+    return m('div.ai-header-layout-switch', [
+      m(
+        'button',
+        {
+          class: layout === 'right' ? 'active' : '',
+          title: '横屏模式：AI Assistant 显示在 Timeline 右侧',
+          onclick: () => setLayout('right'),
+        },
+        '横屏',
+      ),
+      m(
+        'button',
+        {
+          class: layout === 'bottom' ? 'active' : '',
+          title: '竖屏模式：AI Assistant 显示在 Timeline 底部',
+          onclick: () => setLayout('bottom'),
+        },
+        '竖屏',
+      ),
+    ]);
+  }
+
   view(vnode: m.Vnode<AIPanelAttrs>) {
     // Detect selection changes and update slice card state.
     this.updateSliceCard();
@@ -1058,95 +1227,8 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                 })
               : null,
             isInRpcMode ? m('span.ai-status-text.backend', 'RPC') : null,
-            // Preset question buttons - only show when connected to backend
-            isInRpcMode && !this.state.isLoading
-              ? m('div.ai-preset-questions', [
-                  ...(this.state.referenceTraceId
-                    ? COMPARISON_PRESET_QUESTIONS
-                    : PRESET_QUESTIONS
-                  ).map((preset) =>
-                    m(
-                      `button.ai-preset-btn${preset.isTeaching ? '.ai-teaching-btn' : ''}`,
-                      {
-                        onclick: () => this.sendPresetQuestion(preset.question),
-                        title: preset.isTeaching
-                          ? '检测当前 Trace 的渲染管线类型，自动 Pin 关键泳道'
-                          : preset.question,
-                        disabled: this.state.isLoading,
-                      },
-                      [m('i.pf-icon', preset.icon), preset.label],
-                    ),
-                  ),
-                  // "Analyze Selection" button — only visible when user has an active selection
-                  this.hasActiveSelection()
-                    ? m(
-                        'button.ai-preset-btn.ai-selection-btn',
-                        {
-                          onclick: () => this.analyzeCurrentSelection(),
-                          title: this.getSelectionButtonTitle(),
-                          disabled: this.state.isLoading,
-                        },
-                        [m('i.pf-icon', 'my_location'), '选区分析'],
-                      )
-                    : null,
-                ])
-              : null,
           ]),
-          m('div.ai-header-right', [
-            // Comparison mode button — only visible when backend trace is available
-            isInRpcMode && hasBackendTrace
-              ? m(
-                  'button.ai-icon-btn',
-                  {
-                    onclick: () => {
-                      this.state.showTracePicker = true;
-                      this.fetchAvailableTraces();
-                      m.redraw();
-                    },
-                    title: this.state.referenceTraceId
-                      ? `对比模式: ${this.state.referenceTraceName || 'Reference Trace'}`
-                      : '对比...',
-                    class: this.state.referenceTraceId ? 'active' : '',
-                  },
-                  m('i.pf-icon', 'compare_arrows'),
-                )
-              : null,
-            // Connection status indicator (read-only, no upload button in auto-RPC mode)
-            m(
-              'span.ai-icon-btn',
-              {
-                title: isInRpcMode
-                  ? 'Connected to AI backend'
-                  : 'AI backend not connected',
-                style: 'cursor: default;',
-              },
-              m('i.pf-icon', isInRpcMode ? 'cloud_done' : 'cloud_off'),
-            ),
-            m(
-              'button.ai-icon-btn',
-              {
-                onclick: () => this.clearChat(),
-                title: 'New Chat',
-              },
-              m('i.pf-icon', 'add_comment'),
-            ),
-            m(
-              'button.ai-icon-btn',
-              {
-                onclick: () => this.popOutToFloatingWindow(),
-                title: '弹出为浮动窗口（可拖动、可调整大小、跨标签页保持可见）',
-              },
-              m('i.pf-icon', 'open_in_new'),
-            ),
-            m(
-              'button.ai-icon-btn',
-              {
-                onclick: () => this.openSettings(),
-                title: 'Settings',
-              },
-              m('i.pf-icon', 'settings'),
-            ),
-          ]),
+          this.renderHeaderActions(isInRpcMode, hasBackendTrace),
         ]),
 
         // Comparison mode indicator bar
@@ -1183,59 +1265,17 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
             ])
           : null,
 
-        // Trace picker modal
-        this.state.showTracePicker ? this.renderTracePicker() : null,
-
-        // View switch toolbar — Chat ↔ Story tabs
-        m(
-          'div.ai-view-tabs',
-          {
-            style:
-              'display: flex; gap: 4px; padding: 8px 16px; border-bottom: 1px solid var(--chat-border); background: var(--chat-bg-secondary);',
-          },
-          [
-            m(
-              'button.ai-view-tab',
-              {
-                onclick: () => {
-                  this.state.currentView = 'chat';
-                  m.redraw();
-                },
-                title: '聊天视图',
-                style: `padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;
-                    background: ${this.state.currentView === 'chat' ? 'var(--chat-solid-primary)' : 'transparent'};
-                    color: ${this.state.currentView === 'chat' ? 'var(--chat-user-text)' : 'var(--chat-text)'};
-                    font-weight: ${this.state.currentView === 'chat' ? '600' : '400'};`,
-              },
-              '💬 Chat',
-            ),
-            m(
-              'button.ai-view-tab',
-              {
-                onclick: () => {
-                  this.state.currentView = 'story';
-                  m.redraw();
-                },
-                title: '场景还原视图',
-                style: `padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;
-                    background: ${this.state.currentView === 'story' ? 'var(--chat-solid-primary)' : 'transparent'};
-                    color: ${this.state.currentView === 'story' ? 'var(--chat-user-text)' : 'var(--chat-text)'};
-                    font-weight: ${this.state.currentView === 'story' ? '600' : '400'};`,
-              },
-              '🎬 Story',
-            ),
-          ],
-        ),
-
-        // Story view body — visible when currentView === 'story'
-        this.state.currentView === 'story' ? this.renderStoryBody() : null,
-
-        // Main content area with optional sidebar (visible when currentView === 'chat')
+        // Main content area with optional right-side drawers.
         m(
           'div.ai-content-wrapper',
           {
-            class: isInRpcMode ? 'with-sidebar' : '', // 总是显示侧边栏（RPC 模式下）
-            style: this.state.currentView === 'story' ? 'display: none;' : '',
+            class:
+              isInRpcMode &&
+              (this.state.showTracePicker ||
+                this.state.showSessionSidebar ||
+                this.state.showStorySidebar)
+                ? 'with-sidebar'
+                : '',
           },
           [
             // Left: Main content area
@@ -2085,7 +2125,6 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                       : null,
                     this.renderSliceCard(),
                     this.renderAreaCard(),
-                    this.renderAnalysisModeChips(),
                     m('div.ai-input-wrapper', [
                       m('textarea#ai-input.ai-input', {
                         'class':
@@ -2112,36 +2151,43 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                           !this.state.aiService ||
                           !isInRpcMode,
                       }),
-                      m(ProviderQuickSwitcher, {
-                        backendUrl: this.state.settings.backendUrl,
-                        apiKey: this.state.settings.backendApiKey || undefined,
-                        compact: true,
-                        onActivate: () => this.refreshServerStatus(),
-                      }),
-                      m('div.ai-input-divider'),
-                      this.state.isLoading
-                        ? m(
-                            'button.ai-send-btn.ai-stop-btn',
-                            {
-                              onclick: () => this.cancelAnalysis(),
-                              title: 'Stop analysis',
-                            },
-                            m('i.pf-icon', 'stop_circle'),
-                          )
-                        : m(
-                            'button.ai-send-btn',
-                            {
-                              'class':
-                                !this.state.aiService || !isInRpcMode
-                                  ? 'disabled'
-                                  : '',
-                              'onclick': () => this.sendMessage(),
-                              'disabled': !this.state.aiService || !isInRpcMode,
-                              'title': 'Send (Enter)',
-                              'aria-label': '\u53D1\u9001',
-                            },
-                            m('i.pf-icon', 'send'),
-                          ),
+                      m('div.ai-input-controls', [
+                        this.renderPresetQuestionButtons(isInRpcMode),
+                        m('div.ai-input-control-spacer'),
+                        this.renderAnalysisModeSelector(),
+                        m(ProviderQuickSwitcher, {
+                          backendUrl: this.state.settings.backendUrl,
+                          apiKey:
+                            this.state.settings.backendApiKey || undefined,
+                          compact: true,
+                          onActivate: () => this.refreshServerStatus(),
+                        }),
+                        m('div.ai-input-divider'),
+                        this.state.isLoading
+                          ? m(
+                              'button.ai-send-btn.ai-stop-btn',
+                              {
+                                onclick: () => this.cancelAnalysis(),
+                                title: 'Stop analysis',
+                              },
+                              m('i.pf-icon', 'stop_circle'),
+                            )
+                          : m(
+                              'button.ai-send-btn',
+                              {
+                                'class':
+                                  !this.state.aiService || !isInRpcMode
+                                    ? 'disabled'
+                                    : '',
+                                'onclick': () => this.sendMessage(),
+                                'disabled':
+                                  !this.state.aiService || !isInRpcMode,
+                                'title': 'Send (Enter)',
+                                'aria-label': '\u53D1\u9001',
+                              },
+                              m('i.pf-icon', 'send'),
+                            ),
+                      ]),
                     ]),
                     m(
                       'div.ai-input-hint',
@@ -2160,9 +2206,15 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                 : null,
             ]), // End of ai-main-content
 
-            // Right: Session History Sidebar (总是显示，RPC 模式下)
-            isInRpcMode
+            // Right: Session History Sidebar (visible on demand in RPC mode)
+            isInRpcMode && this.state.showSessionSidebar
               ? this.renderSessionSidebar(sessions, currentIndex)
+              : null,
+            isInRpcMode && this.state.showStorySidebar
+              ? this.renderStorySidebar()
+              : null,
+            isInRpcMode && this.state.showTracePicker
+              ? this.renderTracePicker()
               : null,
           ],
         ), // End of ai-content-wrapper
@@ -2170,41 +2222,129 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     );
   }
 
-  /** Render the analysis mode selector chips (fast / full / auto).
+  /** Render the preset question buttons inside the input bar controls. */
+  private renderPresetQuestionButtons(isInRpcMode: boolean): m.Children {
+    if (!isInRpcMode || this.state.isLoading) {
+      return null;
+    }
+
+    return m('div.ai-preset-questions', [
+      ...(this.state.referenceTraceId
+        ? COMPARISON_PRESET_QUESTIONS
+        : PRESET_QUESTIONS
+      ).map((preset) =>
+        m(
+          `button.ai-preset-btn${preset.isTeaching ? '.ai-teaching-btn' : ''}`,
+          {
+            onclick: () => this.sendPresetQuestion(preset.question),
+            title: preset.isTeaching
+              ? '检测当前 Trace 的渲染管线类型，自动 Pin 关键泳道'
+              : preset.question,
+            disabled: this.state.isLoading,
+          },
+          [m('i.pf-icon', preset.icon), preset.label],
+        ),
+      ),
+      this.hasActiveSelection()
+        ? m(
+            'button.ai-preset-btn.ai-selection-btn',
+            {
+              onclick: () => this.analyzeCurrentSelection(),
+              title: this.getSelectionButtonTitle(),
+              disabled: this.state.isLoading,
+            },
+            [m('i.pf-icon', 'my_location'), '选区分析'],
+          )
+        : null,
+    ]);
+  }
+
+  /** Render the analysis mode selector inside the input bar.
    *  Disables 'fast' when a strong context (comparison mode) is active: the lightweight
    *  MCP registration skips comparison tools and buildQuickSystemPrompt does not consume
    *  selectionContext, so fast under these contexts would silently drop critical state. */
-  private renderAnalysisModeChips(): m.Vnode {
+  private renderAnalysisModeSelector(): m.Vnode {
     const current = this.state.analysisMode;
     const fastDisabled = !!this.state.referenceTraceId;
     const modes = [
-      {id: 'fast', label: '⚡ 快速', title: '5 轮内精简答复，适合简单事实查询'},
-      {id: 'full', label: '🔍 完整', title: '完整多轮分析流水线'},
-      {id: 'auto', label: '🤖 智能', title: '按查询复杂度自动选择'},
+      {
+        id: 'fast',
+        icon: '⚡',
+        label: '快速',
+        title: '5 轮内精简答复，适合简单事实查询',
+      },
+      {
+        id: 'full',
+        icon: '🔍',
+        label: '完整',
+        title: '完整多轮分析流水线',
+      },
+      {
+        id: 'auto',
+        icon: '🤖',
+        label: '智能',
+        title: '按查询复杂度自动选择',
+      },
     ] as const;
+    const currentMode = modes.find((mode) => mode.id === current) ?? modes[2];
     return m(
-      'div.ai-mode-chips',
-      modes.map((mode) => {
-        const disabled = mode.id === 'fast' && fastDisabled;
-        const classes = [
-          current === mode.id ? 'active' : '',
-          disabled ? 'disabled' : '',
-        ]
-          .filter(Boolean)
-          .join(' ');
-        return m(
-          'button.ai-mode-chip',
+      'div.ai-mode-selector',
+      [
+        m(
+          'button.ai-mode-trigger',
           {
-            class: classes,
-            title: disabled
-              ? '对比模式下需完整分析才能利用参考 Trace 上下文'
-              : mode.title,
-            disabled,
-            onclick: () => this.onAnalysisModeChange(mode.id),
+            title: '选择分析模式',
+            onclick: (e: MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              this.state.showAnalysisModeMenu =
+                !this.state.showAnalysisModeMenu;
+            },
           },
-          mode.label,
-        );
-      }),
+          [
+            m('span.ai-mode-trigger-icon', currentMode.icon),
+            m('span', currentMode.label),
+            m('i.pf-icon', 'keyboard_arrow_down'),
+          ],
+        ),
+        this.state.showAnalysisModeMenu
+          ? m(
+              'div.ai-mode-menu',
+              modes.map((mode) => {
+                const disabled = mode.id === 'fast' && fastDisabled;
+                const active = current === mode.id;
+                return m(
+                  'button.ai-mode-menu-item',
+                  {
+                    class: [
+                      active ? 'active' : '',
+                      disabled ? 'disabled' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' '),
+                    title: disabled
+                      ? '对比模式下需完整分析才能利用参考 Trace 上下文'
+                      : mode.title,
+                    disabled,
+                    onclick: (e: MouseEvent) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!disabled) {
+                        this.state.showAnalysisModeMenu = false;
+                        this.onAnalysisModeChange(mode.id);
+                      }
+                    },
+                  },
+                  [
+                    m('span.ai-mode-menu-icon', mode.icon),
+                    m('span.ai-mode-menu-label', mode.label),
+                    active ? m('i.pf-icon', 'check') : null,
+                  ],
+                );
+              }),
+            )
+          : null,
+      ],
     );
   }
 
@@ -3145,9 +3285,6 @@ Click ⚙️ to configure backend connection.`;
         await this.handleTeachingPipelineCommand();
         break;
       case '/scene':
-        // /scene keyword path also activates the Story tab.
-        this.state.currentView = 'story';
-        m.redraw();
         await this.handleSceneReconstructCommand();
         break;
       default:
@@ -5578,11 +5715,32 @@ Output MUST follow this exact markdown structure:
    * controller context if we need richer progress reporting.
    */
   private async handleSceneReconstructCommand() {
-    // Switch to Story view and trigger preview (the new PR3 flow).
-    // Results will render inline in the Story panel. The Chat also gets
-    // a compact notification via StoryController.start() → ctx.addMessage.
-    this.state.currentView = 'story';
+    // Open the Story drawer and trigger preview. Results render in the Story
+    // drawer while Chat keeps showing the ongoing conversation.
+    this.state.showStorySidebar = true;
+    this.state.showSessionSidebar = false;
     void this.handleStoryPreview();
+  }
+
+  private renderStorySidebar(): m.Children {
+    return m('aside.ai-story-sidebar', [
+      m('div.ai-story-sidebar-header', [
+        m('i.pf-icon', 'movie'),
+        m('span', 'Story'),
+        m(
+          'button.ai-story-sidebar-close',
+          {
+            onclick: () => {
+              this.state.showStorySidebar = false;
+              m.redraw();
+            },
+            title: '隐藏 Story',
+          },
+          m('i.pf-icon', 'close'),
+        ),
+      ]),
+      m('div.ai-story-sidebar-body', this.renderStoryBody()),
+    ]);
   }
 
   /**
@@ -7050,35 +7208,26 @@ Output MUST follow this exact markdown structure:
     }
   }
 
-  /** Render trace picker modal for selecting a reference trace. */
+  /** Render trace picker drawer for selecting a reference trace. */
   private renderTracePicker(): m.Vnode {
-    return m(
-      'div.ai-modal-overlay',
-      {
-        onclick: (e: Event) => {
-          if (
-            (e.target as HTMLElement).classList.contains('ai-modal-overlay')
-          ) {
-            this.state.showTracePicker = false;
-            m.redraw();
-          }
-        },
-      },
-      m('div.ai-modal.ai-trace-picker', [
-        m('div.ai-modal-header', [
-          m('span', '选择对比 Trace'),
-          m(
-            'button.ai-modal-close',
-            {
-              onclick: () => {
-                this.state.showTracePicker = false;
-                m.redraw();
-              },
+    return m('aside.ai-trace-picker-sidebar', [
+      m('div.ai-trace-picker-sidebar-header', [
+        m('i.pf-icon', 'compare_arrows'),
+        m('span', '选择对比 Trace'),
+        m(
+          'button.ai-trace-picker-sidebar-close',
+          {
+            onclick: () => {
+              this.state.showTracePicker = false;
+              m.redraw();
             },
-            '\u00D7',
-          ),
-        ]),
-        m('div.ai-modal-body', [
+            title: '关闭',
+          },
+          m('i.pf-icon', 'close'),
+        ),
+      ]),
+      m('div.ai-trace-picker-sidebar-body', [
+        m('div.ai-trace-picker', [
           this.state.comparisonTraceLoading
             ? m('div.ai-trace-picker-loading', '加载 Trace 列表中...')
             : m('div.ai-trace-picker-list', [
@@ -7128,29 +7277,19 @@ Output MUST follow this exact markdown structure:
                     ),
               ]),
         ]),
-        m('div.ai-modal-footer', [
-          this.state.referenceTraceId
-            ? m(
+        this.state.referenceTraceId
+          ? m('div.ai-trace-picker-sidebar-actions', [
+              m(
                 'button.ai-btn-secondary',
                 {
                   onclick: () => this.exitComparisonMode(),
                 },
                 '退出对比',
-              )
-            : null,
-          m(
-            'button.ai-btn-secondary',
-            {
-              onclick: () => {
-                this.state.showTracePicker = false;
-                m.redraw();
-              },
-            },
-            '取消',
-          ),
-        ]),
+              ),
+            ])
+          : null,
       ]),
-    );
+    ]);
   }
 
   /** Enter comparison mode with a reference trace. */
