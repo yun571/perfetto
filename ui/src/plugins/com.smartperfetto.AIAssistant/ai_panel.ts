@@ -283,6 +283,8 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
   private sseAbortController: AbortController | null = null;
   // Paragraph-level progressive reveal: tracks how many children have been animated per message
   private revealedBlockCounts = new Map<string, number>();
+  private renderedMessageContent = new WeakMap<HTMLElement, string>();
+  private copiedMessageIds = new Set<string>();
   // Transient state saver — bound closure registered in oncreate, cleared in onremove.
   // Captures input draft, collapsed tables, and active SSE analysis when the
   // user switches between tab and floating window mode.
@@ -312,6 +314,22 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     this.revealedBlockCounts.set(msgId, children.length);
   }
 
+  private renderMessageContent(
+    dom: HTMLElement,
+    msg: Message,
+    isProgressMessage: boolean,
+  ): void {
+    const lastRenderedContent = this.renderedMessageContent.get(dom);
+    if (lastRenderedContent === msg.content) return;
+
+    dom.innerHTML = formatMessage(msg.content);
+    this.renderedMessageContent.set(dom, msg.content);
+    void this.renderMermaidInElement(dom);
+    if (msg.role === 'assistant' && !isProgressMessage) {
+      this.applyBlockReveal(dom, msg.id);
+    }
+  }
+
   private async copyTextToClipboard(text: string): Promise<boolean> {
     try {
       if (navigator.clipboard?.writeText) {
@@ -334,6 +352,18 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     } catch {
       return false;
     }
+  }
+
+  private async copyMessageContent(msg: Message): Promise<void> {
+    const ok = await this.copyTextToClipboard(msg.content);
+    if (!ok) return;
+
+    this.copiedMessageIds.add(msg.id);
+    m.redraw();
+    window.setTimeout(() => {
+      this.copiedMessageIds.delete(msg.id);
+      m.redraw();
+    }, 1200);
   }
 
   private trackFullPathToString(trackNode: any): string {
@@ -1558,33 +1588,19 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                                     },
                                     oncreate: (vnode: m.VnodeDOM) => {
                                       const dom = vnode.dom as HTMLElement;
-                                      dom.innerHTML = formatMessage(
-                                        msg.content,
+                                      this.renderMessageContent(
+                                        dom,
+                                        msg,
+                                        isProgressMessage,
                                       );
-                                      void this.renderMermaidInElement(dom);
-                                      if (
-                                        msg.role === 'assistant' &&
-                                        !isProgressMessage
-                                      ) {
-                                        this.applyBlockReveal(dom, msg.id);
-                                      }
                                     },
                                     onupdate: (vnode: m.VnodeDOM) => {
-                                      const newHtml = formatMessage(
-                                        msg.content,
-                                      );
                                       const dom = vnode.dom as HTMLElement;
-                                      // Only update if content actually changed (optimization)
-                                      if (dom.innerHTML !== newHtml) {
-                                        dom.innerHTML = newHtml;
-                                        void this.renderMermaidInElement(dom);
-                                        if (
-                                          msg.role === 'assistant' &&
-                                          !isProgressMessage
-                                        ) {
-                                          this.applyBlockReveal(dom, msg.id);
-                                        }
-                                      }
+                                      this.renderMessageContent(
+                                        dom,
+                                        msg,
+                                        isProgressMessage,
+                                      );
                                     },
                                   }),
 
@@ -1978,49 +1994,81 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                                 : null,
                             ]), // end ai-bubble-wrapper
 
-                            // Feedback buttons — show on non-progress assistant messages
-                            msg.role === 'assistant' &&
+                            // Message actions — available during normal input,
+                            // answer streaming, and report generation.
                             !isProgressMessage &&
-                            msg.content.length > 50
+                            msg.content.trim().length > 0
                               ? m('div.ai-feedback-bar', [
                                   m(
                                     'button.ai-feedback-btn',
                                     {
-                                      class:
-                                        (this.state as any)[
-                                          `feedback_${msg.id}`
-                                        ] === 'positive'
-                                          ? 'active'
-                                          : '',
-                                      title: '有用',
+                                      class: this.copiedMessageIds.has(msg.id)
+                                        ? 'active'
+                                        : '',
+                                      title: this.copiedMessageIds.has(msg.id)
+                                        ? '已复制'
+                                        : '复制回复',
                                       onclick: () => {
-                                        (this.state as any)[
-                                          `feedback_${msg.id}`
-                                        ] = 'positive';
-                                        this.submitFeedback(msg.id, 'positive');
+                                        void this.copyMessageContent(msg);
                                       },
                                     },
-                                    m('i.pf-icon', 'thumb_up'),
+                                    m(
+                                      'i.pf-icon',
+                                      this.copiedMessageIds.has(msg.id)
+                                        ? 'check'
+                                        : 'content_copy',
+                                    ),
                                   ),
-                                  m(
-                                    'button.ai-feedback-btn',
-                                    {
-                                      class:
-                                        (this.state as any)[
-                                          `feedback_${msg.id}`
-                                        ] === 'negative'
-                                          ? 'active'
-                                          : '',
-                                      title: '不准确',
-                                      onclick: () => {
-                                        (this.state as any)[
-                                          `feedback_${msg.id}`
-                                        ] = 'negative';
-                                        this.submitFeedback(msg.id, 'negative');
-                                      },
-                                    },
-                                    m('i.pf-icon', 'thumb_down'),
-                                  ),
+                                  msg.role === 'assistant' &&
+                                  msg.content.length > 50
+                                    ? m(
+                                        'button.ai-feedback-btn',
+                                        {
+                                          class:
+                                            (this.state as any)[
+                                              `feedback_${msg.id}`
+                                            ] === 'positive'
+                                              ? 'active'
+                                              : '',
+                                          title: '有用',
+                                          onclick: () => {
+                                            (this.state as any)[
+                                              `feedback_${msg.id}`
+                                            ] = 'positive';
+                                            this.submitFeedback(
+                                              msg.id,
+                                              'positive',
+                                            );
+                                          },
+                                        },
+                                        m('i.pf-icon', 'thumb_up'),
+                                      )
+                                    : null,
+                                  msg.role === 'assistant' &&
+                                  msg.content.length > 50
+                                    ? m(
+                                        'button.ai-feedback-btn',
+                                        {
+                                          class:
+                                            (this.state as any)[
+                                              `feedback_${msg.id}`
+                                            ] === 'negative'
+                                              ? 'active'
+                                              : '',
+                                          title: '不准确',
+                                          onclick: () => {
+                                            (this.state as any)[
+                                              `feedback_${msg.id}`
+                                            ] = 'negative';
+                                            this.submitFeedback(
+                                              msg.id,
+                                              'negative',
+                                            );
+                                          },
+                                        },
+                                        m('i.pf-icon', 'thumb_down'),
+                                      )
+                                    : null,
                                 ])
                               : null,
                           ],

@@ -21,6 +21,51 @@ import {describe, it, expect, jest} from '@jest/globals';
 import {AIPanel} from './ai_panel';
 
 describe('AIPanel /goto navigation', () => {
+  it('keeps rendered assistant content stable across unrelated redraws', () => {
+    const panel = new AIPanel() as any;
+    panel.renderMermaidInElement = jest.fn();
+    const dom = document.createElement('div');
+    const msg = {
+      id: 'msg-1',
+      role: 'assistant',
+      content: '## 结论\n\n可以复制的分析结果。',
+      timestamp: Date.now(),
+    };
+
+    panel.renderMessageContent(dom, msg, false);
+    const heading = dom.querySelector('h2') as HTMLElement;
+    heading.setAttribute('data-selection-anchor', 'kept');
+
+    panel.renderMessageContent(dom, msg, false);
+
+    expect(dom.querySelector('h2')?.getAttribute('data-selection-anchor')).toBe(
+      'kept',
+    );
+  });
+
+  it('copies any normal conversation message content', async () => {
+    jest.useFakeTimers();
+    const panel = new AIPanel() as any;
+    panel.copyTextToClipboard = jest.fn(async () => true);
+    const msg = {
+      id: 'user-msg-1',
+      role: 'user',
+      content: '用户输入也应该可以复制',
+      timestamp: Date.now(),
+    };
+
+    await panel.copyMessageContent(msg);
+
+    expect(panel.copyTextToClipboard).toHaveBeenCalledWith(
+      '用户输入也应该可以复制',
+    );
+    expect(panel.copiedMessageIds.has('user-msg-1')).toBe(true);
+
+    jest.runOnlyPendingTimers();
+    expect(panel.copiedMessageIds.has('user-msg-1')).toBe(false);
+    jest.useRealTimers();
+  });
+
   it('returns an error when jumpToTimestamp is called without trace context', () => {
     const panel = new AIPanel() as any;
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
