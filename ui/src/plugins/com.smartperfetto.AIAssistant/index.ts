@@ -34,6 +34,19 @@ import {locateFloatingWindow, setupFloatingWindow} from './ai_floating_window';
 import {getFloatingState, toggleSidebarCollapsed, updateFloatingState} from './ai_floating_state';
 import {resetTransientState, switchFloatingMode} from './ai_transient_state';
 import {setupCriticalPathExtension} from './critical_path_extension';
+import {setDefaultBackendUrl} from '../../core/backend_uploader';
+
+// Inject smart-detected backend URL at module load time, BEFORE any trace
+// auto-upload kicks in. Remote access via http://<ip>:10000 derives the
+// backend URL as http://<ip>:3000.
+(function injectBackendUrl() {
+  try {
+    const hostname = window.location.hostname;
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      setDefaultBackendUrl(`http://${hostname}:3000`);
+    }
+  } catch {}
+})();
 
 function toggleSidebarPanel(): void {
   if (!isTimelineRouteActive()) return;

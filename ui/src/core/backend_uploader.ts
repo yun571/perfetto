@@ -246,10 +246,17 @@ export class BackendUploader {
 
 // Singleton instance with configurable backend URL
 let uploaderInstance: BackendUploader | undefined;
+let configuredBackendUrl: string | undefined;
+
+/** Set the default backend URL BEFORE any trace is loaded (call at module init). */
+export function setDefaultBackendUrl(url: string) {
+  configuredBackendUrl = url;
+}
 
 export function getBackendUploader(backendUrl?: string): BackendUploader {
-  if (!uploaderInstance || (backendUrl && uploaderInstance['backendUrl'] !== backendUrl)) {
-    uploaderInstance = new BackendUploader(backendUrl);
+  const url = backendUrl ?? configuredBackendUrl ?? 'http://localhost:3000';
+  if (!uploaderInstance || uploaderInstance['backendUrl'] !== url) {
+    uploaderInstance = new BackendUploader(url);
   }
   return uploaderInstance;
 }
