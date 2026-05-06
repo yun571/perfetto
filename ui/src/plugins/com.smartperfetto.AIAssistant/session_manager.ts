@@ -67,12 +67,36 @@ export class SessionManager {
       if (stored) {
         // Merge stored settings with defaults to handle new properties
         const storedSettings = JSON.parse(stored);
-        return {...DEFAULT_SETTINGS, ...storedSettings};
+        const merged = {...DEFAULT_SETTINGS, ...storedSettings};
+        // Keep user's explicit backend URL, otherwise auto-detect for remote access
+        return this.applySmartBackendUrl(merged, storedSettings.backendUrl);
       }
     } catch {
       // Use default settings on error
     }
-    return {...DEFAULT_SETTINGS};
+    return {...DEFAULT_SETTINGS, ...this.getSmartBackendUrl()};
+  }
+
+  /**
+   * When the user hasn't explicitly set a custom backend URL (i.e. it is still
+   * the default localhost:3000), derive it from the page origin. So remote
+   * access via http://<ip>:10000 automatically connects to http://<ip>:3000.
+   */
+  private applySmartBackendUrl(settings: AISettings, storedBackendUrl?: string): AISettings {
+    // Legacy localhost default from older versions — always migrate to smart URL
+    const LEGACY_DEFAULTS = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+    if (storedBackendUrl && !LEGACY_DEFAULTS.includes(storedBackendUrl)) {
+      return settings; // User set a truly custom backend URL — respect it
+    }
+    return {...settings, ...this.getSmartBackendUrl()};
+  }
+
+  private getSmartBackendUrl(): Partial<AISettings> {
+    const hostname = window.location.hostname;
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return {backendUrl: `http://${hostname}:3000`};
+    }
+    return {};
   }
 
   /**
