@@ -16,16 +16,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import {buildSmartPerfettoWorkspaceApiUrl} from '../../core/smartperfetto_request_context';
+
 export const ASSISTANT_API_V1_BASE = '/api/agent/v1';
 
-function trimTrailingSlash(value: string): string {
-  return String(value || '').replace(/\/+$/, '');
-}
-
 function ensureLeadingSlash(value: string): string {
-  return String(value || '').startsWith('/') ? String(value) : `/${String(value)}`;
+  return String(value || '').startsWith('/')
+    ? String(value)
+    : `/${String(value)}`;
 }
 
 export function buildAssistantApiV1Url(backendUrl: string, path: string): string {
-  return `${trimTrailingSlash(backendUrl)}${ASSISTANT_API_V1_BASE}${ensureLeadingSlash(path)}`;
+  return buildSmartPerfettoWorkspaceApiUrl(
+    backendUrl,
+    'agent',
+    ensureLeadingSlash(path),
+  );
 }

@@ -20,11 +20,14 @@ import m from 'mithril';
 import type {AISettings, ServerStatus} from './types';
 import {ProviderPanel} from './provider_panel';
 import {providerRuntimeLabel} from './provider_types';
+import type {SmartPerfettoRequestContext} from '../../core/smartperfetto_request_context';
 
 export interface SettingsModalAttrs {
   settings: AISettings;
+  workspaceContext: SmartPerfettoRequestContext;
   onClose: () => void;
   onSave: (settings: AISettings) => void;
+  onWorkspaceChange: (workspaceId: string) => void;
   onCheckStatus: (backendUrl: string, apiKey: string) => Promise<ServerStatus>;
   initialStatus?: ServerStatus;
 }
@@ -313,11 +316,13 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
   private serverStatus: ServerStatus | null = null;
   private onCheckStatus!: SettingsModalAttrs['onCheckStatus'];
   private currentTab: SettingsTab = 'connection';
+  private workspaceId = '';
 
   oninit(vnode: m.Vnode<SettingsModalAttrs>) {
     this.settings = {...vnode.attrs.settings};
     this.onCheckStatus = vnode.attrs.onCheckStatus;
     this.serverStatus = vnode.attrs.initialStatus ?? null;
+    this.workspaceId = vnode.attrs.workspaceContext.workspaceId;
   }
 
   private async checkStatus() {
@@ -514,6 +519,25 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
                 ),
                 m('div', {style: MODAL_STYLES.field}, [
                   m('label', {style: MODAL_STYLES.fieldLabel}, [
+                    m('span', {style: MODAL_STYLES.fieldIcon}, '🏢'),
+                    'Workspace ID',
+                  ]),
+                  m('input[type=text]', {
+                    style: MODAL_STYLES.input,
+                    value: this.workspaceId,
+                    onchange: (e: Event) => {
+                      this.workspaceId = (e.target as HTMLInputElement).value;
+                    },
+                    placeholder: vnode.attrs.workspaceContext.workspaceId,
+                  }),
+                  m(
+                    'div',
+                    {style: MODAL_STYLES.hint},
+                    `Tenant: ${vnode.attrs.workspaceContext.tenantId} · User: ${vnode.attrs.workspaceContext.userId} · Window: ${vnode.attrs.workspaceContext.windowId}`,
+                  ),
+                ]),
+                m('div', {style: MODAL_STYLES.field}, [
+                  m('label', {style: MODAL_STYLES.fieldLabel}, [
                     m('span', {style: MODAL_STYLES.fieldIcon}, '🖥️'),
                     'Backend URL',
                   ]),
@@ -607,7 +631,10 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
                 'button',
                 {
                   style: {...MODAL_STYLES.btn, ...MODAL_STYLES.btnPrimary},
-                  onclick: () => vnode.attrs.onSave(this.settings),
+                  onclick: () => {
+                    vnode.attrs.onWorkspaceChange(this.workspaceId);
+                    vnode.attrs.onSave(this.settings);
+                  },
                 },
                 '\u{1F4BE} Save Settings',
               ),

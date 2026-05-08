@@ -605,6 +605,39 @@
   }
 }
 
+.ai-workspace-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 150px;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--chat-border);
+  border-radius: 6px;
+  background: var(--chat-bg-secondary);
+  color: var(--chat-text-secondary);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 0;
+
+  .pf-icon {
+    font-size: 13px !important;
+    flex-shrink: 0;
+  }
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover {
+    color: var(--chat-text);
+    background: var(--chat-bg-tertiary);
+  }
+}
+
 // Preset question buttons, now hosted in the input bar control row.
 .ai-preset-questions {
   display: flex;
@@ -845,6 +878,12 @@
 
   .ai-status-text.backend {
     font-size: 10px;
+  }
+
+  .ai-workspace-chip {
+    max-width: 92px;
+    height: 19px;
+    padding: 0 4px;
   }
 
   .ai-header-actions {

@@ -40,9 +40,16 @@ import {
   PENDING_BACKEND_TRACE_KEY,
 } from './types';
 import {NavigationBookmark} from './navigation_bookmark_bar';
-import {getSmartPerfettoWindowId} from '../../core/smartperfetto_request_context';
+import {
+  buildSmartPerfettoStorageKey,
+  getSmartPerfettoWindowId,
+} from '../../core/smartperfetto_request_context';
 
 export {getSmartPerfettoWindowId};
+
+const PINNED_RESULTS_KEY = 'smartperfetto-pinned-results';
+const ANALYSIS_MODE_KEY = 'ai-analysis-mode';
+type AnalysisMode = 'fast' | 'full' | 'auto';
 
 /**
  * Generates a unique ID for messages and sessions.
@@ -61,7 +68,31 @@ interface SessionsStorageEnvelope extends SessionsStorage {
 export function getPendingBackendTraceStorageKey(
   windowId = getSmartPerfettoWindowId(),
 ): string {
-  return `${PENDING_BACKEND_TRACE_KEY}:${windowId}`;
+  return buildSmartPerfettoStorageKey(
+    PENDING_BACKEND_TRACE_KEY,
+    'window',
+    {windowId},
+  );
+}
+
+export function getSettingsStorageKey(): string {
+  return buildSmartPerfettoStorageKey(SETTINGS_KEY, 'user');
+}
+
+export function getHistoryStorageKey(): string {
+  return buildSmartPerfettoStorageKey(HISTORY_KEY, 'workspace');
+}
+
+export function getSessionsStorageKey(): string {
+  return buildSmartPerfettoStorageKey(SESSIONS_KEY, 'workspace');
+}
+
+export function getPinnedResultsStorageKey(): string {
+  return buildSmartPerfettoStorageKey(PINNED_RESULTS_KEY, 'workspace');
+}
+
+export function getAnalysisModeStorageKey(): string {
+  return buildSmartPerfettoStorageKey(ANALYSIS_MODE_KEY, 'workspace');
 }
 
 /**
@@ -82,7 +113,9 @@ export class SessionManager {
    */
   loadSettings(): AISettings {
     try {
-      const stored = localStorage.getItem(SETTINGS_KEY);
+      const stored =
+        localStorage.getItem(getSettingsStorageKey()) ||
+        localStorage.getItem(SETTINGS_KEY);
       if (stored) {
         // Merge stored settings with defaults to handle new properties
         const storedSettings = JSON.parse(stored);
@@ -123,7 +156,7 @@ export class SessionManager {
    */
   saveSettings(settings: AISettings): void {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      localStorage.setItem(getSettingsStorageKey(), JSON.stringify(settings));
     } catch {
       // Ignore errors
     }
@@ -139,7 +172,9 @@ export class SessionManager {
     traceFingerprint?: string;
   } | null {
     try {
-      const stored = localStorage.getItem(HISTORY_KEY);
+      const stored =
+        localStorage.getItem(getHistoryStorageKey()) ||
+        localStorage.getItem(HISTORY_KEY);
       if (!stored) return null;
 
       const parsed = JSON.parse(stored);
@@ -168,7 +203,7 @@ export class SessionManager {
         backendTraceId,
         traceFingerprint,
       };
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
+      localStorage.setItem(getHistoryStorageKey(), JSON.stringify(data));
     } catch {
       // Ignore errors
     }
@@ -179,7 +214,32 @@ export class SessionManager {
    */
   savePinnedResults(pinnedResults: PinnedResult[]): void {
     try {
-      localStorage.setItem('smartperfetto-pinned-results', JSON.stringify(pinnedResults));
+      localStorage.setItem(
+        getPinnedResultsStorageKey(),
+        JSON.stringify(pinnedResults),
+      );
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  loadAnalysisMode(): AnalysisMode {
+    try {
+      const stored =
+        localStorage.getItem(getAnalysisModeStorageKey()) ||
+        localStorage.getItem(ANALYSIS_MODE_KEY);
+      if (stored === 'fast' || stored === 'full' || stored === 'auto') {
+        return stored;
+      }
+    } catch {
+      // Ignore storage errors.
+    }
+    return 'auto';
+  }
+
+  saveAnalysisMode(mode: AnalysisMode): void {
+    try {
+      localStorage.setItem(getAnalysisModeStorageKey(), mode);
     } catch {
       // Ignore errors
     }
@@ -189,7 +249,10 @@ export class SessionManager {
    * Load all Sessions storage from localStorage.
    */
   loadSessionsStorage(): SessionsStorage {
-    const parsed = this.parseSessionsStorage(localStorage.getItem(SESSIONS_KEY));
+    const parsed = this.parseSessionsStorage(
+      localStorage.getItem(getSessionsStorageKey()) ||
+        localStorage.getItem(SESSIONS_KEY),
+    );
     this.sessionsStorageMtimeMs = parsed.mtimeMs;
     this.sessionsStorageRevision = parsed.revision;
     return parsed.storage;
@@ -296,7 +359,8 @@ export class SessionManager {
    */
   saveSessionsStorage(storage: SessionsStorage): void {
     try {
-      const current = this.parseSessionsStorage(localStorage.getItem(SESSIONS_KEY));
+      const storageKey = getSessionsStorageKey();
+      const current = this.parseSessionsStorage(localStorage.getItem(storageKey));
       const hasConcurrentWrite =
         current.revision > this.sessionsStorageRevision ||
         current.mtimeMs > this.sessionsStorageMtimeMs;
@@ -316,7 +380,7 @@ export class SessionManager {
       let envelope = this.buildSessionsEnvelope(trimmedStorage, revisionBase);
       const serialize = (): string => JSON.stringify(envelope);
       const persist = (serialized: string): void => {
-        localStorage.setItem(SESSIONS_KEY, serialized);
+        localStorage.setItem(storageKey, serialized);
         this.sessionsStorageMtimeMs = envelope._meta?.mtimeMs || 0;
         this.sessionsStorageRevision = envelope._meta?.revision || 0;
       };
@@ -570,8 +634,13 @@ export class SessionManager {
   recoverPendingBackendTrace(currentPort: number): string | null {
     try {
       const scopedKey = getPendingBackendTraceStorageKey();
+      const legacyWindowKey = `${PENDING_BACKEND_TRACE_KEY}:${getSmartPerfettoWindowId()}`;
       let stored = sessionStorage.getItem(scopedKey);
       let legacyStorage = false;
+      if (!stored) {
+        stored = sessionStorage.getItem(legacyWindowKey);
+        legacyStorage = Boolean(stored);
+      }
       if (!stored) {
         stored = localStorage.getItem(PENDING_BACKEND_TRACE_KEY);
         legacyStorage = Boolean(stored);
@@ -581,6 +650,7 @@ export class SessionManager {
       const data = JSON.parse(stored);
       const clearPending = () => {
         sessionStorage.removeItem(scopedKey);
+        sessionStorage.removeItem(legacyWindowKey);
         localStorage.removeItem(PENDING_BACKEND_TRACE_KEY);
       };
 

@@ -5,7 +5,12 @@
 import {Trace} from '../../public/trace';
 import {getBackendUploadState} from '../../core/backend_upload_state';
 import {THREAD_STATE_TRACK_KIND} from '../../public/track_kinds';
+import {
+  buildSmartPerfettoContextHeaders,
+  buildSmartPerfettoWorkspaceApiUrl,
+} from '../../core/smartperfetto_request_context';
 import {DEFAULT_SETTINGS, SETTINGS_KEY} from './types';
+import {getSettingsStorageKey} from './session_manager';
 
 interface CriticalPathSegment {
   startOffsetMs?: number;
@@ -80,9 +85,11 @@ const DRAWER_CLASS = 'sp-critical-path-drawer';
 
 function getBackendUrl(): string {
   try {
-    const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') as {
-      backendUrl?: unknown;
-    };
+    const settings = JSON.parse(
+      localStorage.getItem(getSettingsStorageKey()) ||
+        localStorage.getItem(SETTINGS_KEY) ||
+        '{}',
+    ) as {backendUrl?: unknown};
     if (typeof settings.backendUrl === 'string' && settings.backendUrl.trim()) {
       return settings.backendUrl.replace(/\/+$/, '');
     }
@@ -93,7 +100,10 @@ function getBackendUrl(): string {
 }
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, options);
+  const response = await fetch(url, {
+    ...options,
+    headers: buildSmartPerfettoContextHeaders(options?.headers),
+  });
   const data = (await response.json().catch(() => ({}))) as T & {
     success?: boolean;
     error?: string;
@@ -119,7 +129,9 @@ async function resolveCurrentTraceId(): Promise<string> {
         traces?: {items?: Array<{id?: string; status?: string; uploadedAt?: string; uploadTime?: string}>};
         processors?: {traceIds?: string[]};
       };
-    }>(`${backendUrl}/api/traces/stats`);
+    }>(
+      buildSmartPerfettoWorkspaceApiUrl(backendUrl, 'traces', '/stats'),
+    );
     const items = stats.stats?.traces?.items ?? [];
     const readyItems = items
       .filter((trace) => trace.status === 'ready' && trace.id)
@@ -133,12 +145,12 @@ async function resolveCurrentTraceId(): Promise<string> {
     const traceIds = stats.stats?.processors?.traceIds ?? [];
     if (traceIds.length > 0) return traceIds[traceIds.length - 1];
   } catch {
-    // Fall through to /api/traces.
+    // Fall through to the workspace trace list.
   }
 
   const traces = await fetchJson<{
     traces?: Array<{id?: string; status?: string; uploadedAt?: string; uploadTime?: string}>;
-  }>(`${backendUrl}/api/traces`);
+  }>(buildSmartPerfettoWorkspaceApiUrl(backendUrl, 'traces'));
   const ready = (traces.traces ?? [])
     .filter((trace) => trace.status === 'ready' && trace.id)
     .sort(

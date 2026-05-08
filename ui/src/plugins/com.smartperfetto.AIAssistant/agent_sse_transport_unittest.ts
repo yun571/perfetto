@@ -2,17 +2,22 @@
 // Copyright (C) 2024-2026 Gracker (Chris)
 // This file is part of SmartPerfetto. See LICENSE for details.
 
-import {describe, expect, it} from '@jest/globals';
+import {beforeEach, describe, expect, it} from '@jest/globals';
 
 import {
   buildAgentSseStreamInit,
   buildAgentSseStreamUrl,
 } from './agent_sse_transport';
 
+beforeEach(() => {
+  localStorage.clear();
+  sessionStorage.clear();
+});
+
 describe('Agent SSE transport', () => {
   it('builds the agent stream URL without cursor query params', () => {
     expect(buildAgentSseStreamUrl('http://backend/', 'session-a')).toBe(
-      'http://backend/api/agent/v1/session-a/stream',
+      'http://backend/api/workspaces/default-workspace/agent/session-a/stream',
     );
   });
 

@@ -6,7 +6,10 @@
 
 import {TraceSource} from './trace_source';
 import {fetchWithTimeout} from '../base/http_utils';
-import {buildSmartPerfettoContextHeaders} from './smartperfetto_request_context';
+import {
+  buildSmartPerfettoContextHeaders,
+  buildSmartPerfettoWorkspaceApiUrl,
+} from './smartperfetto_request_context';
 
 const BACKEND_CHECK_TIMEOUT_MS = 1000; // Fast timeout for health check
 const BACKEND_UPLOAD_TIMEOUT_MS = 60000; // 60s timeout for upload
@@ -32,7 +35,7 @@ export class BackendUploader {
   async checkAvailable(): Promise<boolean> {
     try {
       const resp = await fetchWithTimeout(
-        `${this.backendUrl}/api/traces/health`,
+        buildSmartPerfettoWorkspaceApiUrl(this.backendUrl, 'traces', '/health'),
         {
           method: 'GET',
           cache: 'no-cache',
@@ -138,7 +141,7 @@ export class BackendUploader {
 
     try {
       const resp = await fetchWithTimeout(
-        `${this.backendUrl}/api/traces/upload`,
+        buildSmartPerfettoWorkspaceApiUrl(this.backendUrl, 'traces', '/upload'),
         {
           method: 'POST',
           headers: buildSmartPerfettoContextHeaders(),
@@ -196,7 +199,11 @@ export class BackendUploader {
 
     try {
       const resp = await fetchWithTimeout(
-        `${this.backendUrl}/api/traces/upload-url`,
+        buildSmartPerfettoWorkspaceApiUrl(
+          this.backendUrl,
+          'traces',
+          '/upload-url',
+        ),
         {
           method: 'POST',
           headers: buildSmartPerfettoContextHeaders({

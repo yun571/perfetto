@@ -16,6 +16,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import {buildSmartPerfettoContextHeaders} from '../../core/smartperfetto_request_context';
+
 const DEBUG_BACKEND_PROXY_SERVICE = false;
 
 export interface AIMessage {
@@ -110,9 +112,9 @@ export class BackendProxyService extends AIService {
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
+        headers: buildSmartPerfettoContextHeaders({
           'Content-Type': 'application/json',
-        },
+        }),
         body: JSON.stringify({
           model: this.model,
           messages: messages,
@@ -143,9 +145,9 @@ export class BackendProxyService extends AIService {
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
+        headers: buildSmartPerfettoContextHeaders({
           'Content-Type': 'application/json',
-        },
+        }),
         body: JSON.stringify({
           model: this.model,
           messages: [{ role: 'user', content: 'test' }],

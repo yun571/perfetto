@@ -38,7 +38,12 @@ import {Trace} from '../../public/trace';
 import {HttpRpcEngine} from '../../trace_processor/http_rpc_engine';
 import {AppImpl} from '../../core/app_impl';
 import {getBackendUploader} from '../../core/backend_uploader';
-import {buildSmartPerfettoContextHeaders} from '../../core/smartperfetto_request_context';
+import {
+  buildSmartPerfettoContextHeaders,
+  buildSmartPerfettoWorkspaceApiUrl,
+  getSmartPerfettoRequestContext,
+  setSmartPerfettoWorkspaceId,
+} from '../../core/smartperfetto_request_context';
 import {
   getBackendUploadState,
   subscribeBackendUploadState,
@@ -245,17 +250,9 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     comparisonTraceLoading: false,
     // Story Panel
     storyState: createStoryPanelState(),
-    // Analysis mode (persisted in localStorage under 'ai-analysis-mode'; default 'auto')
-    analysisMode: (() => {
-      try {
-        const stored = localStorage.getItem('ai-analysis-mode');
-        if (stored === 'fast' || stored === 'full' || stored === 'auto')
-          return stored;
-      } catch {
-        /* ignore — private browsing or storage quota */
-      }
-      return 'auto';
-    })(),
+    // Analysis mode is workspace-scoped so different workspaces keep separate
+    // quick/full/auto preferences.
+    analysisMode: sessionManager.loadAnalysisMode(),
     showAnalysisModeMenu: false,
     showSessionSidebar: false,
     showStorySidebar: false,
@@ -582,7 +579,11 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     try {
       // 调用后端 API 注册当前 RPC 连接
       const response = await this.fetchBackend(
-        `${this.state.settings.backendUrl}/api/traces/register-rpc`,
+        buildSmartPerfettoWorkspaceApiUrl(
+          this.state.settings.backendUrl,
+          'traces',
+          '/register-rpc',
+        ),
         {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -1141,6 +1142,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
         ? providerRuntimeLabel(this.serverStatus.runtime)
         : 'AI Agent'
       : 'Backend';
+    const workspaceContext = getSmartPerfettoRequestContext();
     const isConnected = this.serverStatus.connected;
     // Check backend availability: engine in HTTP_RPC mode, OR backend upload completed/in-progress
     // With non-blocking upload, WASM engine is used for UI while backend runs separately
@@ -1165,9 +1167,12 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
         this.state.showSettings
           ? m(SettingsModal, {
               settings: this.state.settings,
+              workspaceContext,
               onClose: () => this.closeSettings(),
               onSave: (newSettings: AISettings) =>
                 this.saveSettings(newSettings),
+              onWorkspaceChange: (workspaceId: string) =>
+                this.onWorkspaceSelectionChange(workspaceId),
               onCheckStatus: (url: string, key: string) =>
                 this.checkServerStatus(url, key),
               initialStatus: this.serverStatus.connected
@@ -1185,6 +1190,17 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
               class: isConnected ? 'connected' : 'disconnected',
             }),
             m('span.ai-status-text', providerLabel),
+            m(
+              'button.ai-workspace-chip',
+              {
+                title: `Workspace: ${workspaceContext.workspaceId}\nTenant: ${workspaceContext.tenantId}\nUser: ${workspaceContext.userId}\nWindow: ${workspaceContext.windowId}`,
+                onclick: () => this.openSettings(),
+              },
+              [
+                m('i.pf-icon', 'workspaces'),
+                m('span', workspaceContext.workspaceId),
+              ],
+            ),
             // SSE streaming status (visible during analysis)
             this.state.sseConnectionState !== 'disconnected'
               ? m('span.ai-status-dot', {
@@ -2360,11 +2376,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     if (newMode === this.state.analysisMode) return;
     const hadSession = !!this.state.agentSessionId;
     this.state.analysisMode = newMode;
-    try {
-      localStorage.setItem('ai-analysis-mode', newMode);
-    } catch {
-      /* ignore */
-    }
+    sessionManager.saveAnalysisMode(newMode);
     if (hadSession) {
       this.state.agentSessionId = null;
       this.clearAgentObservability();
@@ -2396,12 +2408,46 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     m.redraw();
   }
 
+  private onWorkspaceSelectionChange(workspaceId: string): void {
+    const previousContext = getSmartPerfettoRequestContext();
+    const nextWorkspaceId = setSmartPerfettoWorkspaceId(
+      workspaceId,
+      previousContext.tenantId,
+      previousContext.userId,
+    );
+    if (nextWorkspaceId === previousContext.workspaceId) return;
+
+    this.cancelSSEConnection();
+    this.availableTraces = [];
+    this.state.showTracePicker = false;
+    this.state.referenceTraceId = null;
+    this.state.referenceTraceName = null;
+    this.state.isReferenceActive = false;
+    this.state.comparisonTraceLoading = false;
+    clearComparisonState();
+    this.state.analysisMode = sessionManager.loadAnalysisMode();
+
+    this.resetStateForNewTrace();
+    this.addMessage({
+      id: this.generateId(),
+      role: 'system',
+      content: `已切换到 Workspace: ${nextWorkspaceId}。当前窗口的 Trace、AI 会话和临时运行状态已按新 Workspace 隔离。`,
+      timestamp: Date.now(),
+    });
+    this.saveCurrentSession();
+    this.refreshServerStatus();
+    m.redraw();
+  }
+
   private submitFeedback(
     _messageId: string,
     rating: 'positive' | 'negative',
   ): void {
     if (!this.state.agentSessionId || !this.state.settings.backendUrl) return;
-    const url = `${this.state.settings.backendUrl}/api/agent/v1/${this.state.agentSessionId}/feedback`;
+    const url = buildAssistantApiV1Url(
+      this.state.settings.backendUrl,
+      `/${this.state.agentSessionId}/feedback`,
+    );
     const turnIndex = this.state.messages.filter(
       (msg) => msg.role === 'user',
     ).length;
@@ -2573,7 +2619,11 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
 
     try {
       const response = await this.fetchBackend(
-        `${this.state.settings.backendUrl}/api/traces/${this.state.backendTraceId}`,
+        buildSmartPerfettoWorkspaceApiUrl(
+          this.state.settings.backendUrl,
+          'traces',
+          `/${this.state.backendTraceId}`,
+        ),
       );
       if (!response.ok) {
         if (DEBUG_AI_PANEL)
@@ -7307,7 +7357,10 @@ Output MUST follow this exact markdown structure:
     this.state.comparisonTraceLoading = true;
     m.redraw();
     try {
-      const url = `${this.state.settings.backendUrl.replace(/\/+$/, '')}/api/traces`;
+      const url = buildSmartPerfettoWorkspaceApiUrl(
+        this.state.settings.backendUrl,
+        'traces',
+      );
       const response = await this.fetchBackend(url);
       if (response.ok) {
         const data = await response.json();
@@ -7468,7 +7521,11 @@ Output MUST follow this exact markdown structure:
     if (!targetTraceId) return;
 
     // Open the trace file download URL — browser/Perfetto will handle it in a new tab
-    const fileUrl = `${this.state.settings.backendUrl.replace(/\/+$/, '')}/api/traces/${targetTraceId}/file`;
+    const fileUrl = buildSmartPerfettoWorkspaceApiUrl(
+      this.state.settings.backendUrl,
+      'traces',
+      `/${targetTraceId}/file`,
+    );
     window.open(fileUrl, '_blank');
 
     this.addMessage({

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import {
+  buildSmartPerfettoContextHeaders,
+  buildSmartPerfettoWorkspaceApiUrl,
+} from '../../core/smartperfetto_request_context';
+
 export type ProviderType =
   | 'anthropic'
   | 'bedrock'
@@ -219,12 +224,11 @@ export const CONNECTION_FIELD_LABELS: Record<
 export function buildHeaders(apiKey?: string): Record<string, string> {
   const headers: Record<string, string> = {'Content-Type': 'application/json'};
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-  return headers;
+  return buildSmartPerfettoContextHeaders(headers);
 }
 
 export function apiUrl(backendUrl: string, path: string): string {
-  const base = backendUrl.replace(/\/+$/, '');
-  return `${base}/api/v1/providers${path}`;
+  return buildSmartPerfettoWorkspaceApiUrl(backendUrl, 'providers', path);
 }
 
 export function providerHasClaudeSurface(provider: ProviderConfig): boolean {
