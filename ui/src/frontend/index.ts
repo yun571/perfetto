@@ -531,7 +531,7 @@ function maybeChangeRpcPortFromFragment() {
         ],
       });
     } else {
-      HttpRpcEngine.rpcPort = route.args.rpc_port;
+      HttpRpcEngine.useDirectPort(route.args.rpc_port);
     }
   }
 }

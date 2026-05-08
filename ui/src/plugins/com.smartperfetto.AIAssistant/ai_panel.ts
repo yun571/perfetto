@@ -545,16 +545,18 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
    * 这样后端可以执行 SQL 查询
    */
   private async autoRegisterWithBackend(): Promise<void> {
-    const rpcPort = HttpRpcEngine.rpcPort;
+    const rpcTarget = HttpRpcEngine.getCurrentTarget();
+    const rpcPort = rpcTarget.port ?? HttpRpcEngine.rpcPort;
     if (DEBUG_AI_PANEL)
       console.log(
-        '[AIPanel] Auto-registering with backend, RPC port:',
-        rpcPort,
+        '[AIPanel] Auto-registering with backend, RPC target:',
+        rpcTarget,
       );
 
     // First, check if there's a pending backendTraceId from a recent upload
     const pendingTraceId = this.recoverPendingBackendTrace(
-      parseInt(rpcPort, 10),
+      rpcTarget.port ? parseInt(rpcTarget.port, 10) : undefined,
+      rpcTarget.leaseId,
     );
     if (pendingTraceId) {
       if (DEBUG_AI_PANEL)
@@ -567,12 +569,17 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       this.addMessage({
         id: this.generateId(),
         role: 'assistant',
-        content: `✅ **已进入 RPC 模式**\n\nTrace 已成功上传并通过 HTTP RPC (端口 ${rpcPort}) 加载。\nAI 助手已就绪，可以开始分析。\n\n试试问我：\n- 这个 Trace 有什么性能问题？\n- 帮我分析启动耗时\n- 有没有卡顿？`,
+        content: `✅ **已进入 RPC 模式**\n\nTrace 已成功上传并通过 ${this.rpcModeDescription()} 加载。\nAI 助手已就绪，可以开始分析。\n\n试试问我：\n- 这个 Trace 有什么性能问题？\n- 帮我分析启动耗时\n- 有没有卡顿？`,
         timestamp: Date.now(),
       });
 
       this.saveCurrentSession();
       m.redraw();
+      return;
+    }
+
+    if (rpcTarget.mode === 'backend-lease-proxy') {
+      this.addRpcModeWelcomeMessage();
       return;
     }
 
@@ -608,7 +615,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
           this.addMessage({
             id: this.generateId(),
             role: 'assistant',
-            content: `✅ **已连接到 RPC 模式**\n\n检测到当前 Trace 已通过 HTTP RPC (端口 ${rpcPort}) 加载。\nAI 助手现在可以分析这份 Trace 数据了。\n\n试试问我：\n- 这个 Trace 有什么性能问题？\n- 帮我分析启动耗时\n- 有没有卡顿？`,
+            content: `✅ **已连接到 RPC 模式**\n\n检测到当前 Trace 已通过 ${this.rpcModeDescription()} 加载。\nAI 助手现在可以分析这份 Trace 数据了。\n\n试试问我：\n- 这个 Trace 有什么性能问题？\n- 帮我分析启动耗时\n- 有没有卡顿？`,
             timestamp: Date.now(),
           });
 
@@ -672,12 +679,12 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       // 尝试上传 Trace
       const uploadResult = await uploader.upload(traceSource);
 
-      if (!uploadResult.success || !uploadResult.port) {
+      if (!uploadResult.success || (!uploadResult.rpcTarget && !uploadResult.port)) {
         throw new Error(uploadResult.error || '上传 Trace 失败');
       }
 
       if (DEBUG_AI_PANEL)
-        console.log('[AIPanel] Upload successful, port:', uploadResult.port);
+        console.log('[AIPanel] Upload successful:', uploadResult);
 
       // 上传成功，需要重新加载 Trace 以使用新的 RPC 端口
       // 显示提示信息
@@ -689,12 +696,20 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       });
 
       // 设置 RPC 端口并重新加载 Trace
-      HttpRpcEngine.rpcPort = String(uploadResult.port);
+      if (uploadResult.rpcTarget) {
+        HttpRpcEngine.setRpcTarget(uploadResult.rpcTarget);
+      } else if (uploadResult.port) {
+        HttpRpcEngine.useDirectPort(String(uploadResult.port));
+      }
 
       // 存储 traceId 用于后续注册
       if (uploadResult.traceId) {
         this.state.backendTraceId = uploadResult.traceId;
-        sessionManager.storePendingBackendTrace(uploadResult.traceId, uploadResult.port);
+        sessionManager.storePendingBackendTrace(
+          uploadResult.traceId,
+          uploadResult.port,
+          uploadResult.leaseId,
+        );
       }
 
       // The backend has already loaded the trace into trace_processor_shell.
@@ -717,22 +732,29 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
    * 从临时存储中恢复 pending backendTraceId
    * 用于在 trace reload 后恢复上传时设置的 traceId
    */
-  private recoverPendingBackendTrace(currentPort: number): string | null {
-    return sessionManager.recoverPendingBackendTrace(currentPort);
+  private recoverPendingBackendTrace(currentPort?: number, currentLeaseId?: string): string | null {
+    return sessionManager.recoverPendingBackendTrace(currentPort, currentLeaseId);
   }
 
   /**
    * RPC 模式欢迎消息（无需上传）
    */
   private addRpcModeWelcomeMessage(): void {
-    const rpcPort = HttpRpcEngine.rpcPort;
     this.addMessage({
       id: this.generateId(),
       role: 'assistant',
-      content: `✅ **AI 助手已就绪**\n\nTrace 已通过 HTTP RPC (端口 ${rpcPort}) 加载。\n前后端共享同一个 trace_processor，可以开始分析。\n\n试试问我：\n- 这个 Trace 有什么性能问题？\n- 帮我分析启动耗时\n- 有没有卡顿？`,
+      content: `✅ **AI 助手已就绪**\n\nTrace 已通过 ${this.rpcModeDescription()} 加载。\n前后端共享同一个 trace_processor，可以开始分析。\n\n试试问我：\n- 这个 Trace 有什么性能问题？\n- 帮我分析启动耗时\n- 有没有卡顿？`,
       timestamp: Date.now(),
     });
     m.redraw();
+  }
+
+  private rpcModeDescription(): string {
+    const target = HttpRpcEngine.getCurrentTarget();
+    if (target.mode === 'backend-lease-proxy') {
+      return `后端 Lease 代理 (${target.leaseId ?? 'unknown'})`;
+    }
+    return `HTTP RPC (端口 ${target.port ?? HttpRpcEngine.rpcPort})`;
   }
 
   /**

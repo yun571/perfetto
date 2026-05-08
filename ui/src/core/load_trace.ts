@@ -182,13 +182,22 @@ async function createEngine(
           console.log('[AutoRPC] Starting background upload...');
           const result = await uploader.upload(traceSource);
 
-          if (result.success && result.port) {
+          if (result.success && (result.rpcTarget || result.port)) {
+            if (result.rpcTarget) {
+              HttpRpcEngine.setRpcTarget(result.rpcTarget);
+            } else if (result.port) {
+              HttpRpcEngine.useDirectPort(String(result.port));
+            }
             console.log(
-              `[AutoRPC] Background upload complete, traceId=${result.traceId}, port=${result.port}`,
+              `[AutoRPC] Background upload complete, traceId=${result.traceId}, `
+                + `port=${result.port ?? 'n/a'}, leaseId=${result.leaseId ?? 'n/a'}`,
             );
             setBackendUploadState({
               state: 'ready',
               traceId: result.traceId ?? '',
+              port: result.port,
+              leaseId: result.leaseId,
+              rpcTarget: result.rpcTarget,
             });
           } else {
             const error = result.error ?? 'Background upload failed';

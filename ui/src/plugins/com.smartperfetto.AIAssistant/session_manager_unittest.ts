@@ -60,6 +60,17 @@ describe('SessionManager pending backend trace storage', () => {
       sessionStorage.getItem(getPendingBackendTraceStorageKey('window-a')),
     ).toContain('trace-a');
   });
+
+  it('recovers pending backend traces by lease id for proxy mode', () => {
+    sessionStorage.setItem('smartperfetto-window-id', 'window-a');
+    const manager = new SessionManager();
+
+    manager.storePendingBackendTrace('trace-lease', undefined, 'lease-a');
+
+    expect(manager.recoverPendingBackendTrace(undefined, 'lease-a')).toBe(
+      'trace-lease',
+    );
+  });
 });
 
 describe('SessionManager session storage CAS', () => {

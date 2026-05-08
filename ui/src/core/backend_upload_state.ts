@@ -1,7 +1,12 @@
+import type {HttpRpcTarget} from '../trace_processor/http_rpc_engine';
+
 export type BackendUploadPhase = 'idle' | 'uploading' | 'ready' | 'failed';
 
 export interface BackendUploadSnapshot {
   traceId?: string;
+  port?: number;
+  leaseId?: string;
+  rpcTarget?: HttpRpcTarget;
   state: BackendUploadPhase;
   error?: string;
 }
@@ -32,6 +37,9 @@ export function getBackendUploadState(): BackendUploadSnapshot {
 export function setBackendUploadState(next: BackendUploadSnapshot): void {
   snapshot = {
     traceId: next.traceId,
+    port: next.port,
+    leaseId: next.leaseId,
+    rpcTarget: next.rpcTarget,
     state: next.state,
     error: next.error,
   };
@@ -44,4 +52,3 @@ export function subscribeBackendUploadState(listener: Listener): () => void {
     listeners.delete(listener);
   };
 }
-

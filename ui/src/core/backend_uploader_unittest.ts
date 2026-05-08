@@ -45,7 +45,7 @@ describe('BackendUploader request context', () => {
   it('sends X-Window-Id on file uploads', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({
       success: true,
-      trace: {id: 'trace-a', port: 9817},
+      trace: {id: 'trace-a', port: 9817, leaseId: 'lease-a'},
     }));
 
     const result = await new BackendUploader('http://backend').upload({
@@ -54,7 +54,18 @@ describe('BackendUploader request context', () => {
       fileName: 'trace.perfetto',
     } as any);
 
-    expect(result).toMatchObject({success: true, traceId: 'trace-a', port: 9817});
+    expect(result).toMatchObject({
+      success: true,
+      traceId: 'trace-a',
+      port: 9817,
+      leaseId: 'lease-a',
+      rpcTarget: {
+        mode: 'backend-lease-proxy',
+        leaseId: 'lease-a',
+        statusUrl: expect.stringContaining('/api/tp/lease-a/status?'),
+        websocketUrl: expect.stringContaining('/api/tp/lease-a/websocket?'),
+      },
+    });
     expect(requestHeaders(0)['X-Window-Id']).toBe('window-upload');
   });
 
@@ -73,6 +84,29 @@ describe('BackendUploader request context', () => {
     expect(requestHeaders(0)).toMatchObject({
       'Content-Type': 'application/json',
       'X-Window-Id': 'window-upload',
+    });
+  });
+
+  it('accepts lease-only upload responses for backend proxy mode', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({
+      success: true,
+      trace: {id: 'trace-lease-only', leaseId: 'lease-only'},
+    }));
+
+    const result = await new BackendUploader('https://backend.example/base').upload({
+      type: 'ARRAY_BUFFER',
+      buffer: new Uint8Array([1]).buffer,
+      fileName: 'trace.perfetto',
+    } as any);
+
+    expect(result).toMatchObject({
+      success: true,
+      traceId: 'trace-lease-only',
+      leaseId: 'lease-only',
+      rpcTarget: {
+        statusUrl: expect.stringContaining('https://backend.example/base/api/tp/lease-only/status?'),
+        websocketUrl: expect.stringContaining('wss://backend.example/base/api/tp/lease-only/websocket?'),
+      },
     });
   });
 });

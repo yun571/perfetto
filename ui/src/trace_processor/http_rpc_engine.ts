@@ -26,6 +26,30 @@ export interface HttpRpcState {
   failure?: string;
 }
 
+export interface HttpRpcTarget {
+  mode: 'direct-port' | 'backend-lease-proxy';
+  host?: string;
+  port?: string;
+  leaseId?: string;
+  statusUrl: string;
+  websocketUrl: string;
+  displayName?: string;
+  headers?: HeadersInit;
+  credentials?: RequestCredentials;
+}
+
+function directPortTarget(port: string): HttpRpcTarget {
+  const host = '127.0.0.1';
+  return {
+    mode: 'direct-port',
+    host,
+    port,
+    statusUrl: `http://${host}:${port}/status`,
+    websocketUrl: `ws://${host}:${port}/websocket`,
+    displayName: `${host}:${port}`,
+  };
+}
+
 export class HttpRpcEngine extends EngineBase {
   readonly mode = 'HTTP_RPC';
   readonly id: string;
@@ -38,6 +62,7 @@ export class HttpRpcEngine extends EngineBase {
 
   // Can be changed by frontend/index.ts when passing ?rpc_port=1234 .
   static rpcPort = '9001';
+  private static rpcTarget?: HttpRpcTarget;
 
   constructor(id: string) {
     super();
@@ -47,7 +72,7 @@ export class HttpRpcEngine extends EngineBase {
   rpcSendRequestBytes(data: Uint8Array): void {
     if (this.websocket === undefined) {
       if (this.disposed) return;
-      const wsUrl = `ws://${HttpRpcEngine.hostAndPort}/websocket`;
+      const wsUrl = HttpRpcEngine.getCurrentTarget().websocketUrl;
       this.websocket = new WebSocket(wsUrl);
       this.websocket.onopen = () => this.onWebsocketConnected();
       this.websocket.onmessage = (e) => this.onWebsocketMessage(e);
@@ -110,17 +135,22 @@ export class HttpRpcEngine extends EngineBase {
   }
 
   static async checkConnection(): Promise<HttpRpcState> {
-    const RPC_URL = `http://${HttpRpcEngine.hostAndPort}/`;
+    const target = HttpRpcEngine.getCurrentTarget();
     const httpRpcState: HttpRpcState = {connected: false};
     console.info(
-      `It's safe to ignore the ERR_CONNECTION_REFUSED on ${RPC_URL} below. ` +
+      `It's safe to ignore the ERR_CONNECTION_REFUSED on ${target.statusUrl} below. ` +
         `That might happen while probing the external native accelerator. The ` +
         `error is non-fatal and unlikely to be the culprit for any UI bug.`,
     );
     try {
       const resp = await fetchWithTimeout(
-        RPC_URL + 'status',
-        {method: 'post', cache: 'no-cache'},
+        target.statusUrl,
+        {
+          method: 'post',
+          cache: 'no-cache',
+          headers: target.headers,
+          credentials: target.credentials,
+        },
         RPC_CONNECT_TIMEOUT_MS,
       );
       if (resp.status !== 200) {
@@ -138,8 +168,25 @@ export class HttpRpcEngine extends EngineBase {
     return httpRpcState;
   }
 
+  static useDirectPort(port = HttpRpcEngine.rpcPort): void {
+    HttpRpcEngine.rpcPort = String(port);
+    HttpRpcEngine.rpcTarget = undefined;
+  }
+
+  static setRpcTarget(target: HttpRpcTarget): void {
+    HttpRpcEngine.rpcTarget = target;
+    if (target.mode === 'direct-port' && target.port) {
+      HttpRpcEngine.rpcPort = String(target.port);
+      HttpRpcEngine.rpcTarget = undefined;
+    }
+  }
+
+  static getCurrentTarget(): HttpRpcTarget {
+    return HttpRpcEngine.rpcTarget ?? directPortTarget(HttpRpcEngine.rpcPort);
+  }
+
   static get hostAndPort() {
-    return `127.0.0.1:${HttpRpcEngine.rpcPort}`;
+    return HttpRpcEngine.getCurrentTarget().displayName ?? 'unknown HTTP RPC target';
   }
 
   [Symbol.dispose]() {

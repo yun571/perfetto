@@ -610,13 +610,14 @@ export class SessionManager {
   /**
    * Store pending backend trace ID for recovery after reload.
    */
-  storePendingBackendTrace(traceId: string, port: number): void {
+  storePendingBackendTrace(traceId: string, port?: number, leaseId?: string): void {
     try {
       sessionStorage.setItem(
         getPendingBackendTraceStorageKey(),
         JSON.stringify({
           traceId,
           port,
+          leaseId,
           timestamp: Date.now(),
         })
       );
@@ -627,11 +628,11 @@ export class SessionManager {
   }
 
   /**
-   * Recover pending backend trace ID if port matches and not too old.
+   * Recover pending backend trace ID if port or lease matches and not too old.
    * Returns the traceId if valid, null otherwise.
    * Clears the pending data after recovery.
    */
-  recoverPendingBackendTrace(currentPort: number): string | null {
+  recoverPendingBackendTrace(currentPort?: number, currentLeaseId?: string): string | null {
     try {
       const scopedKey = getPendingBackendTraceStorageKey();
       const legacyWindowKey = `${PENDING_BACKEND_TRACE_KEY}:${getSmartPerfettoWindowId()}`;
@@ -654,8 +655,12 @@ export class SessionManager {
         localStorage.removeItem(PENDING_BACKEND_TRACE_KEY);
       };
 
-      // Check if the stored data matches current port and is recent (within 60 seconds)
-      if (data.port === currentPort && (Date.now() - data.timestamp) < 60000) {
+      const isRecent = (Date.now() - data.timestamp) < 60000;
+      const portMatches = currentPort !== undefined && data.port === currentPort;
+      const leaseMatches = currentLeaseId !== undefined && data.leaseId === currentLeaseId;
+
+      // Check if the stored data matches current target and is recent (within 60 seconds)
+      if ((portMatches || leaseMatches) && isRecent) {
         // Clear the pending data after recovery
         clearPending();
         console.log('[SessionManager] Recovered and cleared pending backend trace');

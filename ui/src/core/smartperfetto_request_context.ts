@@ -207,3 +207,33 @@ export function buildSmartPerfettoWorkspaceApiUrl(
     workspaceId,
   )}/${resource}${ensureLeadingSlash(path)}`;
 }
+
+export function buildSmartPerfettoTraceProcessorProxyTarget(
+  backendUrl: string,
+  leaseId: string,
+) {
+  const context = getSmartPerfettoRequestContext();
+  const encodedLeaseId = encodeURIComponent(leaseId);
+  const query = new URLSearchParams({
+    tenantId: context.tenantId,
+    userId: context.userId,
+    workspaceId: context.workspaceId,
+    windowId: context.windowId,
+  }).toString();
+  const httpBase = `${trimTrailingSlash(backendUrl)}/api/tp/${encodedLeaseId}`;
+  const parsedBackend = new URL(trimTrailingSlash(backendUrl));
+  const websocketProtocol = parsedBackend.protocol === 'https:' ? 'wss:' : 'ws:';
+  const pathPrefix = parsedBackend.pathname.replace(/\/+$/, '');
+  const websocketBase = `${websocketProtocol}//${parsedBackend.host}${pathPrefix}`;
+  const suffix = query ? `?${query}` : '';
+
+  return {
+    mode: 'backend-lease-proxy' as const,
+    leaseId,
+    statusUrl: `${httpBase}/status${suffix}`,
+    websocketUrl: `${websocketBase}/api/tp/${encodedLeaseId}/websocket${suffix}`,
+    displayName: `backend lease ${leaseId.slice(0, 8)}`,
+    headers: buildSmartPerfettoContextHeaders(),
+    credentials: 'include' as const,
+  };
+}

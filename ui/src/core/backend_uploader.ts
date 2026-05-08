@@ -8,8 +8,10 @@ import {TraceSource} from './trace_source';
 import {fetchWithTimeout} from '../base/http_utils';
 import {
   buildSmartPerfettoContextHeaders,
+  buildSmartPerfettoTraceProcessorProxyTarget,
   buildSmartPerfettoWorkspaceApiUrl,
 } from './smartperfetto_request_context';
+import type {HttpRpcTarget} from '../trace_processor/http_rpc_engine';
 
 const BACKEND_CHECK_TIMEOUT_MS = 1000; // Fast timeout for health check
 const BACKEND_UPLOAD_TIMEOUT_MS = 60000; // 60s timeout for upload
@@ -19,6 +21,8 @@ export interface BackendUploadResult {
   success: boolean;
   traceId?: string;
   port?: number;
+  leaseId?: string;
+  rpcTarget?: HttpRpcTarget;
   error?: string;
 }
 
@@ -168,22 +172,7 @@ export class BackendUploader {
         };
       }
 
-      const {id: traceId, port} = data.trace;
-
-      if (!port) {
-        return {
-          success: false,
-          error: 'Backend did not return a port for HTTP RPC',
-        };
-      }
-
-      console.log(`[BackendUploader] Upload successful! traceId=${traceId}, port=${port}`);
-
-      return {
-        success: true,
-        traceId,
-        port,
-      };
+      return this.buildUploadResult(data.trace, 'Upload');
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('[BackendUploader] Upload error:', errorMsg);
@@ -232,22 +221,7 @@ export class BackendUploader {
         };
       }
 
-      const {id: traceId, port} = data.trace;
-
-      if (!port) {
-        return {
-          success: false,
-          error: 'Backend did not return a port for HTTP RPC',
-        };
-      }
-
-      console.log(`[BackendUploader] URL upload successful! traceId=${traceId}, port=${port}`);
-
-      return {
-        success: true,
-        traceId,
-        port,
-      };
+      return this.buildUploadResult(data.trace, 'URL upload');
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('[BackendUploader] URL upload error:', errorMsg);
@@ -256,6 +230,36 @@ export class BackendUploader {
         error: `URL upload error: ${errorMsg}`,
       };
     }
+  }
+
+  private buildUploadResult(trace: {
+    id?: string;
+    port?: number;
+    leaseId?: string;
+  }, label: string): BackendUploadResult {
+    const {id: traceId, port, leaseId} = trace;
+    if (!port && !leaseId) {
+      return {
+        success: false,
+        error: 'Backend did not return an HTTP RPC port or lease',
+      };
+    }
+
+    const rpcTarget = leaseId
+      ? buildSmartPerfettoTraceProcessorProxyTarget(this.backendUrl, leaseId)
+      : undefined;
+    console.log(
+      `[BackendUploader] ${label} successful! traceId=${traceId}, `
+        + `port=${port ?? 'n/a'}, leaseId=${leaseId ?? 'n/a'}`,
+    );
+
+    return {
+      success: true,
+      traceId,
+      port,
+      leaseId,
+      rpcTarget,
+    };
   }
 }
 
