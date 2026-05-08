@@ -19,6 +19,7 @@
 import m from 'mithril';
 import type {AISettings, ServerStatus} from './types';
 import {ProviderPanel} from './provider_panel';
+import {providerRuntimeLabel} from './provider_types';
 
 export interface SettingsModalAttrs {
   settings: AISettings;
@@ -360,12 +361,9 @@ export class SettingsModal implements m.ClassComponent<SettingsModalAttrs> {
       ]);
     }
 
-    const runtimeLabel =
-      status.runtime === 'agentv3'
-        ? 'Claude Agent SDK (agentv3)'
-        : status.runtime === 'agentv2'
-          ? 'Legacy Agent (agentv2)'
-          : 'Unknown';
+    const runtimeLabel = status.runtime
+      ? providerRuntimeLabel(status.runtime)
+      : 'Unknown';
 
     return m('div', {style: MODAL_STYLES.statusCard}, [
       m(

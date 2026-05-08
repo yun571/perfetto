@@ -7,6 +7,8 @@ import {
   ProviderTemplate,
   ProviderPanelAttrs,
   HealthStatus,
+  providerRuntimeLabel,
+  resolveProviderRuntime,
   buildHeaders,
   apiUrl,
 } from './provider_types';
@@ -495,7 +497,7 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
                       marginTop: '2px',
                     },
                   },
-                  'Use .env configuration (ANTHROPIC_API_KEY, CLAUDE_MODEL, etc.)',
+                  'Use .env configuration (SMARTPERFETTO_AGENT_RUNTIME; default Claude SDK)',
                 ),
               ],
             ),
@@ -513,7 +515,7 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
     const isHovered = this.hoveredId === provider.id;
     const isExpanded = this.expandedId === provider.id;
     const health = this.healthMap.get(provider.id) || 'untested';
-    const hasSubtitle = isActive || provider.category === 'official';
+    const hasSubtitle = true;
 
     return m(
       'div',
@@ -649,6 +651,20 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
                               'Official',
                             )
                           : null,
+                        m(
+                          'span',
+                          {
+                            style: {
+                              fontSize: '10px',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              backgroundColor: `${t.textMuted}20`,
+                              color: t.textSecondary,
+                              fontWeight: 500,
+                            },
+                          },
+                          providerRuntimeLabel(resolveProviderRuntime(provider)),
+                        ),
                         isActive
                           ? m(
                               'span',
@@ -767,10 +783,17 @@ export class ProviderPanel implements m.ClassComponent<ProviderPanelAttrs> {
                 onclick: (e: Event) => e.stopPropagation(),
               },
               [
+                m('div', `Runtime: ${providerRuntimeLabel(resolveProviderRuntime(provider))}`),
                 m('div', `Primary: ${provider.models.primary}`),
                 m('div', `Light: ${provider.models.light}`),
                 provider.models.subAgent
                   ? m('div', `Sub-agent: ${provider.models.subAgent}`)
+                  : null,
+                provider.connection.claudeBaseUrl
+                  ? m('div', `Claude URL: ${provider.connection.claudeBaseUrl}`)
+                  : null,
+                provider.connection.openaiBaseUrl
+                  ? m('div', `OpenAI URL: ${provider.connection.openaiBaseUrl}`)
                   : null,
                 provider.tuning && Object.keys(provider.tuning).length > 0
                   ? m(

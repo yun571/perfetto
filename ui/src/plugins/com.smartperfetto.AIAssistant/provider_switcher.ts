@@ -3,9 +3,13 @@
 import m from 'mithril';
 
 import {
+  AgentRuntimeKind,
   ProviderConfig,
   ProviderQuickSwitcherAttrs,
   HealthStatus,
+  providerRuntimeLabel,
+  providerSupportsRuntime,
+  resolveProviderRuntime,
   buildHeaders,
   apiUrl,
 } from './provider_types';
@@ -167,6 +171,40 @@ export class ProviderQuickSwitcher
     }
   }
 
+  private async switchRuntime(
+    provider: ProviderConfig,
+    runtime: AgentRuntimeKind,
+    vnode?: m.Vnode<ProviderQuickSwitcherAttrs>,
+  ) {
+    this.activating = true;
+    m.redraw();
+    try {
+      const runtimeRes = await fetch(apiUrl(this.backendUrl, `/${provider.id}/runtime`), {
+        method: 'POST',
+        headers: buildHeaders(this.apiKey),
+        body: JSON.stringify({agentRuntime: runtime}),
+      });
+      if (!runtimeRes.ok) return;
+
+      const activateRes = await fetch(apiUrl(this.backendUrl, `/${provider.id}/activate`), {
+        method: 'POST',
+        headers: buildHeaders(this.apiKey),
+      });
+      if (activateRes.ok) {
+        await this.loadProviders();
+        this.showToast(`✶ Switched to ${provider.name} · ${providerRuntimeLabel(runtime)}`);
+        vnode?.attrs.onActivate?.();
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      this.activating = false;
+      this.open = false;
+      this.focusIndex = -1;
+      m.redraw();
+    }
+  }
+
   private async deactivateAll(vnode?: m.Vnode<ProviderQuickSwitcherAttrs>) {
     this.activating = true;
     m.redraw();
@@ -240,6 +278,9 @@ export class ProviderQuickSwitcher
               if (this.open) this.focusIndex = -1;
             }
           },
+          title: active
+            ? `${active.name} · ${providerRuntimeLabel(resolveProviderRuntime(active))}`
+            : 'System Default · .env',
           disabled: this.activating,
         },
         [
@@ -257,6 +298,13 @@ export class ProviderQuickSwitcher
             },
             active?.name || 'System Default',
           ),
+          active
+            ? m(
+                'span',
+                {style: {fontSize: '10px', opacity: 0.65, whiteSpace: 'nowrap'}},
+                resolveProviderRuntime(active) === 'openai-agents-sdk' ? 'OA' : 'CL',
+              )
+            : null,
           m(
             'span',
             {style: {fontSize: '10px', opacity: 0.6}},
@@ -342,7 +390,7 @@ export class ProviderQuickSwitcher
           m(
             'div',
             {style: {fontSize: '11px', color: t.textSecondary}},
-            '.env config',
+            '.env config · server-selected SDK',
           ),
         ]),
         noActiveProvider ? m('div', {style: s.activeDot}) : null,
@@ -396,15 +444,74 @@ export class ProviderQuickSwitcher
                       fontFamily: 'monospace',
                     },
                   },
-                  p.models.primary,
+                  `${providerRuntimeLabel(resolveProviderRuntime(p))} · ${p.models.primary}`,
                 ),
               ]),
+              this.renderRuntimeButtons(p, vnode),
               this.renderHealthDot(p.id),
               p.isActive ? m('div', {style: s.activeDot}) : null,
             ],
           ),
         ),
       ],
+    );
+  }
+
+  private renderRuntimeButtons(
+    provider: ProviderConfig,
+    vnode: m.Vnode<ProviderQuickSwitcherAttrs>,
+  ): m.Children {
+    if (
+      !providerSupportsRuntime(provider, 'claude-agent-sdk') ||
+      !providerSupportsRuntime(provider, 'openai-agents-sdk')
+    ) {
+      return null;
+    }
+
+    const t = getTokens();
+    const current = resolveProviderRuntime(provider);
+    const buttons: Array<{runtime: AgentRuntimeKind; label: string}> = [
+      {runtime: 'claude-agent-sdk', label: 'Claude'},
+      {runtime: 'openai-agents-sdk', label: 'OpenAI'},
+    ];
+
+    return m(
+      'div',
+      {
+        style: {
+          display: 'inline-flex',
+          border: `1px solid ${t.border}`,
+          borderRadius: '5px',
+          overflow: 'hidden',
+          flexShrink: 0,
+        },
+        onclick: (e: Event) => e.stopPropagation(),
+      },
+      buttons.map((button, index) => {
+        const active = current === button.runtime;
+        return m(
+          'button',
+          {
+            key: button.runtime,
+            type: 'button',
+            style: {
+              border: 'none',
+              borderRight: index === 0 ? `1px solid ${t.border}` : 'none',
+              padding: '4px 6px',
+              cursor: active && provider.isActive ? 'default' : 'pointer',
+              fontSize: '10px',
+              fontWeight: active ? 700 : 500,
+              color: active ? '#1a1a1a' : t.textSecondary,
+              background: active ? t.accentGradient : t.surface,
+            },
+            onclick: () => {
+              if (active && provider.isActive) return;
+              void this.switchRuntime(provider, button.runtime, vnode);
+            },
+          },
+          button.label,
+        );
+      }),
     );
   }
 

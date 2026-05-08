@@ -16,7 +16,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-const DEBUG_AI_SERVICE = false;
+const DEBUG_BACKEND_PROXY_SERVICE = false;
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -99,13 +99,13 @@ export class BackendProxyService extends AIService {
     super();
     this.backendUrl = backendUrl.replace(/\/$/, '');
     this.model = model;
-    if (DEBUG_AI_SERVICE) console.log('[BackendProxyService] Initialized with URL:', this.backendUrl, 'model:', this.model);
+    if (DEBUG_BACKEND_PROXY_SERVICE) console.log('[BackendProxyService] Initialized with URL:', this.backendUrl, 'model:', this.model);
   }
 
   async chat(messages: AIMessage[]): Promise<string> {
     const url = `${this.backendUrl}/api/agent/v1/llm/completions`;
-    if (DEBUG_AI_SERVICE) console.log('[BackendProxyService] Sending request to:', url);
-    if (DEBUG_AI_SERVICE) console.log('[BackendProxyService] Messages:', messages);
+    if (DEBUG_BACKEND_PROXY_SERVICE) console.log('[BackendProxyService] Sending request to:', url);
+    if (DEBUG_BACKEND_PROXY_SERVICE) console.log('[BackendProxyService] Messages:', messages);
 
     try {
       const response = await fetch(url, {
@@ -119,7 +119,7 @@ export class BackendProxyService extends AIService {
         }),
       });
 
-      if (DEBUG_AI_SERVICE) console.log('[BackendProxyService] Response status:', response.status, response.statusText);
+      if (DEBUG_BACKEND_PROXY_SERVICE) console.log('[BackendProxyService] Response status:', response.status, response.statusText);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -128,7 +128,7 @@ export class BackendProxyService extends AIService {
       }
 
       const data = await response.json();
-      if (DEBUG_AI_SERVICE) console.log('[BackendProxyService] Response data:', data);
+      if (DEBUG_BACKEND_PROXY_SERVICE) console.log('[BackendProxyService] Response data:', data);
       return data.choices?.[0]?.message?.content || '';
     } catch (e: any) {
       console.error('[BackendProxyService] Request failed:', e);
@@ -138,7 +138,7 @@ export class BackendProxyService extends AIService {
 
   async testConnection(): Promise<boolean> {
     const url = `${this.backendUrl}/api/agent/v1/llm/completions`;
-    if (DEBUG_AI_SERVICE) console.log('[BackendProxyService] Testing connection to:', url);
+    if (DEBUG_BACKEND_PROXY_SERVICE) console.log('[BackendProxyService] Testing connection to:', url);
 
     try {
       const response = await fetch(url, {
@@ -152,9 +152,9 @@ export class BackendProxyService extends AIService {
         }),
       });
 
-      if (DEBUG_AI_SERVICE) console.log('[BackendProxyService] Test response status:', response.status);
+      if (DEBUG_BACKEND_PROXY_SERVICE) console.log('[BackendProxyService] Test response status:', response.status);
       const result = response.ok || response.status < 500;
-      if (DEBUG_AI_SERVICE) console.log('[BackendProxyService] Test result:', result);
+      if (DEBUG_BACKEND_PROXY_SERVICE) console.log('[BackendProxyService] Test result:', result);
       return result;
     } catch (e: any) {
       console.error('[BackendProxyService] Test connection failed:', e);

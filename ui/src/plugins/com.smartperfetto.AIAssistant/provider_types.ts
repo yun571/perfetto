@@ -9,6 +9,8 @@ export type ProviderType =
   | 'ollama'
   | 'custom';
 export type ProviderCategory = 'official' | 'proxy' | 'local' | 'custom';
+export type AgentRuntimeKind = 'claude-agent-sdk' | 'openai-agents-sdk';
+export type OpenAIProtocol = 'responses' | 'chat_completions';
 
 export type HealthStatus = 'passed' | 'failed' | 'untested';
 
@@ -21,6 +23,13 @@ export interface ProviderModels {
 export interface ProviderConnection {
   apiKey?: string;
   baseUrl?: string;
+  claudeBaseUrl?: string;
+  claudeApiKey?: string;
+  claudeAuthToken?: string;
+  openaiBaseUrl?: string;
+  openaiApiKey?: string;
+  agentRuntime?: AgentRuntimeKind;
+  openaiProtocol?: OpenAIProtocol;
   awsRegion?: string;
   awsBearerToken?: string;
   awsAccessKeyId?: string;
@@ -64,6 +73,7 @@ export interface ProviderTemplate {
   requiredFields: string[];
   defaultModels: ProviderModels;
   availableModels: Array<{id: string; name: string; tier: string}>;
+  defaultConnection?: Partial<ProviderConnection>;
 }
 
 export interface ProviderPanelAttrs {
@@ -106,6 +116,23 @@ export const CONNECTION_FIELD_LABELS: Record<
     type: 'text',
     placeholder: 'https://api.example.com',
   },
+  claudeBaseUrl: {
+    label: 'Claude-compatible Base URL',
+    type: 'text',
+    placeholder: 'https://api.example.com/anthropic',
+  },
+  claudeApiKey: {label: 'Claude API Key', type: 'password', placeholder: 'sk-...'},
+  claudeAuthToken: {
+    label: 'Claude Auth Token',
+    type: 'password',
+    placeholder: 'Bearer token...',
+  },
+  openaiBaseUrl: {
+    label: 'OpenAI-compatible Base URL',
+    type: 'text',
+    placeholder: 'https://api.example.com/v1',
+  },
+  openaiApiKey: {label: 'OpenAI API Key', type: 'password', placeholder: 'sk-...'},
   awsRegion: {label: 'AWS Region', type: 'text', placeholder: 'us-east-1'},
   awsBearerToken: {
     label: 'AWS Bearer Token',
@@ -145,6 +172,65 @@ export function buildHeaders(apiKey?: string): Record<string, string> {
 export function apiUrl(backendUrl: string, path: string): string {
   const base = backendUrl.replace(/\/+$/, '');
   return `${base}/api/v1/providers${path}`;
+}
+
+export function providerHasClaudeSurface(provider: ProviderConfig): boolean {
+  const conn = provider.connection;
+  if (
+    provider.type === 'anthropic' ||
+    provider.type === 'bedrock' ||
+    provider.type === 'vertex' ||
+    provider.type === 'deepseek'
+  ) {
+    return true;
+  }
+  return !!(
+    conn.claudeBaseUrl ||
+    conn.claudeApiKey ||
+    conn.claudeAuthToken ||
+    (provider.type === 'custom' && conn.agentRuntime !== 'openai-agents-sdk' && (conn.baseUrl || conn.apiKey))
+  );
+}
+
+export function providerHasOpenAISurface(provider: ProviderConfig): boolean {
+  const conn = provider.connection;
+  if (provider.type === 'openai' || provider.type === 'ollama' || provider.type === 'deepseek') {
+    return true;
+  }
+  return !!(
+    conn.openaiBaseUrl ||
+    conn.openaiApiKey ||
+    conn.openaiProtocol ||
+    (provider.type === 'custom' && conn.agentRuntime === 'openai-agents-sdk' && (conn.baseUrl || conn.apiKey))
+  );
+}
+
+export function resolveProviderRuntime(provider?: ProviderConfig): AgentRuntimeKind {
+  const runtime = provider?.connection.agentRuntime;
+  if (runtime === 'openai-agents-sdk' || runtime === 'claude-agent-sdk') {
+    return runtime;
+  }
+  if (!provider) return 'claude-agent-sdk';
+  if (provider.type === 'openai' || provider.type === 'ollama') {
+    return 'openai-agents-sdk';
+  }
+  if (provider.type === 'custom' && providerHasOpenAISurface(provider) && !providerHasClaudeSurface(provider)) {
+    return 'openai-agents-sdk';
+  }
+  return 'claude-agent-sdk';
+}
+
+export function providerSupportsRuntime(
+  provider: ProviderConfig,
+  runtime: AgentRuntimeKind,
+): boolean {
+  return runtime === 'openai-agents-sdk'
+    ? providerHasOpenAISurface(provider)
+    : providerHasClaudeSurface(provider);
+}
+
+export function providerRuntimeLabel(runtime: AgentRuntimeKind): string {
+  return runtime === 'openai-agents-sdk' ? 'OpenAI SDK' : 'Claude SDK';
 }
 
 export type BedrockAuthMethod = 'bearer' | 'accessKey' | 'profile';

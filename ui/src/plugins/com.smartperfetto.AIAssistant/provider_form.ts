@@ -9,6 +9,8 @@ import {
   ProviderTemplate,
   FormState,
   BedrockAuthMethod,
+  AgentRuntimeKind,
+  OpenAIProtocol,
   CONNECTION_FIELD_LABELS,
   buildHeaders,
   apiUrl,
@@ -46,7 +48,10 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         name: editingProvider.name,
         type: editingProvider.type,
         models: {...editingProvider.models},
-        connection: {...editingProvider.connection},
+        connection: this.normalizeConnectionForForm(
+          editingProvider.type,
+          editingProvider.connection,
+        ),
         tuning: editingProvider.tuning ? {...editingProvider.tuning} : {},
         showTuning:
           !!editingProvider.tuning &&
@@ -62,7 +67,7 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         name: `${src.name} (Copy)`,
         type: src.type,
         models: {...src.models},
-        connection: {...src.connection},
+        connection: this.normalizeConnectionForForm(src.type, src.connection),
         tuning: src.tuning ? {...src.tuning} : {},
         showTuning: !!src.tuning && Object.keys(src.tuning).length > 0,
         useBedrock: src.connection.useBedrock !== false,
@@ -76,6 +81,7 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
       if (firstTemplate) {
         this.form.type = firstTemplate.type;
         this.form.models = {...firstTemplate.defaultModels};
+        this.form.connection = {...(firstTemplate.defaultConnection || {})};
       }
     }
     this.expandedSection = 'name';
@@ -86,7 +92,7 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     const template = templates.find((t) => t.type === type);
     if (template) {
       this.form.models = {...template.defaultModels};
-      this.form.connection = {};
+      this.form.connection = {...(template.defaultConnection || {})};
     }
     if (type === 'bedrock') {
       this.form.useBedrock = true;
@@ -102,6 +108,37 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     if (conn.awsBearerToken) return 'bearer';
     if (conn.awsProfile) return 'profile';
     return 'accessKey';
+  }
+
+  private normalizeConnectionForForm(
+    type: ProviderType,
+    connection: FormState['connection'],
+  ): FormState['connection'] {
+    const conn = {...connection};
+    if (type === 'anthropic') {
+      conn.claudeApiKey ??= conn.apiKey;
+      conn.claudeBaseUrl ??= conn.baseUrl;
+    } else if (type === 'openai' || type === 'ollama') {
+      conn.openaiApiKey ??= conn.apiKey;
+      conn.openaiBaseUrl ??= conn.baseUrl;
+      conn.agentRuntime ??= 'openai-agents-sdk';
+      conn.openaiProtocol ??= type === 'openai' ? 'responses' : 'chat_completions';
+    } else if (type === 'deepseek') {
+      conn.claudeBaseUrl ??= conn.baseUrl || 'https://api.deepseek.com/anthropic';
+      conn.openaiBaseUrl ??= 'https://api.deepseek.com/v1';
+      conn.openaiProtocol ??= 'chat_completions';
+      conn.agentRuntime ??= 'claude-agent-sdk';
+    } else if (type === 'custom') {
+      if (conn.agentRuntime === 'openai-agents-sdk' || conn.openaiProtocol) {
+        conn.openaiApiKey ??= conn.apiKey;
+        conn.openaiBaseUrl ??= conn.baseUrl;
+        conn.openaiProtocol ??= 'chat_completions';
+      } else {
+        conn.claudeApiKey ??= conn.apiKey;
+        conn.claudeBaseUrl ??= conn.baseUrl;
+      }
+    }
+    return conn;
   }
 
   private toggleSection(section: AccordionSection) {
@@ -122,6 +159,24 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         return this.form.name.trim().length > 0;
       case 'connection': {
         if (!template) return false;
+        const conn = this.form.connection;
+        if (this.form.type === 'anthropic') {
+          return !!(conn.claudeApiKey || conn.claudeAuthToken || conn.apiKey);
+        }
+        if (this.form.type === 'deepseek') {
+          return !!(conn.apiKey || conn.claudeApiKey || conn.claudeAuthToken || conn.openaiApiKey);
+        }
+        if (this.form.type === 'openai') {
+          return !!(conn.openaiApiKey || conn.apiKey);
+        }
+        if (this.form.type === 'ollama') {
+          return !!(conn.openaiBaseUrl || conn.baseUrl);
+        }
+        if (this.form.type === 'custom') {
+          return this.currentRuntime() === 'openai-agents-sdk'
+            ? !!(conn.openaiBaseUrl || conn.baseUrl)
+            : !!(conn.claudeBaseUrl || conn.baseUrl);
+        }
         const requiredFields = (template.requiredFields || []).map((f) =>
           f.replace(/^connection\./, ''),
         );
@@ -148,6 +203,7 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     }
     const body: Record<string, unknown> = {
       name: this.form.name,
+      category: this.form.type === 'custom' ? 'custom' : 'official',
       type: this.form.type,
       models: {
         primary:
@@ -466,6 +522,18 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
       return this.renderBedrockConnection(s);
     }
 
+    if (this.supportsClaudeSurface(this.form.type) && this.supportsOpenAISurface(this.form.type)) {
+      return this.renderDualSdkConnection(s);
+    }
+
+    if (this.supportsClaudeSurface(this.form.type)) {
+      return this.renderClaudeConnectionFields(s, {includeApiKey: true});
+    }
+
+    if (this.supportsOpenAISurface(this.form.type)) {
+      return this.renderOpenAIConnectionFields(s, {includeApiKey: true});
+    }
+
     const requiredFields = (template.requiredFields || []).map((f) =>
       f.replace(/^connection\./, ''),
     );
@@ -503,6 +571,216 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
         ]);
       }),
     );
+  }
+
+  private supportsClaudeSurface(type: ProviderType): boolean {
+    return type === 'anthropic' || type === 'deepseek' || type === 'custom';
+  }
+
+  private supportsOpenAISurface(type: ProviderType): boolean {
+    return type === 'openai' || type === 'ollama' || type === 'deepseek' || type === 'custom';
+  }
+
+  private currentRuntime(): AgentRuntimeKind {
+    const runtime = this.form.connection.agentRuntime;
+    if (runtime === 'openai-agents-sdk' || runtime === 'claude-agent-sdk') {
+      return runtime;
+    }
+    if (this.form.type === 'openai' || this.form.type === 'ollama') {
+      return 'openai-agents-sdk';
+    }
+    return 'claude-agent-sdk';
+  }
+
+  private renderDualSdkConnection(
+    s: ReturnType<typeof getStyles>,
+  ): m.Children {
+    const t = getTokens();
+    return m('div', [
+      this.renderRuntimeSelector(s),
+      m('div', {style: s.formField}, [
+        m('label', {style: s.formLabel}, 'Shared API Key'),
+        m('input[type=password]', {
+          style: s.formInput,
+          value: this.form.connection.apiKey || '',
+          oninput: (e: Event) => {
+            this.form.connection.apiKey = (e.target as HTMLInputElement).value;
+          },
+          placeholder: 'sk-...',
+        }),
+      ]),
+      m(
+        'div',
+        {
+          style: {
+            marginTop: '14px',
+            paddingTop: '12px',
+            borderTop: `1px solid ${t.border}`,
+          },
+        },
+        [
+          this.renderConnectionGroupTitle('Claude Code SDK'),
+          this.renderClaudeConnectionFields(s, {includeApiKey: false}),
+        ],
+      ),
+      m(
+        'div',
+        {
+          style: {
+            marginTop: '14px',
+            paddingTop: '12px',
+            borderTop: `1px solid ${t.border}`,
+          },
+        },
+        [
+          this.renderConnectionGroupTitle('OpenAI SDK'),
+          this.renderOpenAIConnectionFields(s, {includeApiKey: false}),
+        ],
+      ),
+    ]);
+  }
+
+  private renderRuntimeSelector(s: ReturnType<typeof getStyles>): m.Children {
+    const t = getTokens();
+    const current = this.currentRuntime();
+    const options: Array<{value: AgentRuntimeKind; label: string}> = [
+      {value: 'claude-agent-sdk', label: 'Claude SDK'},
+      {value: 'openai-agents-sdk', label: 'OpenAI SDK'},
+    ];
+
+    return m('div', {style: s.formField}, [
+      m('label', {style: s.formLabel}, 'SDK Runtime'),
+      m(
+        'div',
+        {
+          style: {
+            display: 'inline-flex',
+            border: `1px solid ${t.border}`,
+            borderRadius: '6px',
+            overflow: 'hidden',
+            backgroundColor: t.surface,
+          },
+        },
+        options.map((option) => {
+          const active = current === option.value;
+          return m(
+            'button',
+            {
+              key: option.value,
+              type: 'button',
+              style: {
+                border: 'none',
+                borderRight:
+                  option.value === 'claude-agent-sdk'
+                    ? `1px solid ${t.border}`
+                    : 'none',
+                padding: '7px 12px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: active ? 600 : 500,
+                color: active ? '#1a1a1a' : t.textSecondary,
+                background: active ? t.accentGradient : 'transparent',
+              },
+              onclick: () => {
+                this.form.connection.agentRuntime = option.value;
+              },
+            },
+            option.label,
+          );
+        }),
+      ),
+    ]);
+  }
+
+  private renderConnectionGroupTitle(title: string): m.Children {
+    const t = getTokens();
+    return m(
+      'div',
+      {
+        style: {
+          fontSize: '11px',
+          color: t.textSecondary,
+          fontWeight: 700,
+          textTransform: 'uppercase' as const,
+          marginBottom: '10px',
+        },
+      },
+      title,
+    );
+  }
+
+  private renderClaudeConnectionFields(
+    s: ReturnType<typeof getStyles>,
+    options: {includeApiKey: boolean},
+  ): m.Children {
+    return m('div', [
+      options.includeApiKey
+        ? this.renderConnectionInput(s, 'claudeApiKey')
+        : this.renderConnectionInput(s, 'claudeApiKey', 'Claude API Key Override'),
+      this.renderConnectionInput(s, 'claudeAuthToken'),
+      this.renderConnectionInput(s, 'claudeBaseUrl'),
+    ]);
+  }
+
+  private renderOpenAIConnectionFields(
+    s: ReturnType<typeof getStyles>,
+    options: {includeApiKey: boolean},
+  ): m.Children {
+    return m('div', [
+      options.includeApiKey
+        ? this.renderConnectionInput(s, 'openaiApiKey')
+        : this.renderConnectionInput(s, 'openaiApiKey', 'OpenAI API Key Override'),
+      this.renderConnectionInput(s, 'openaiBaseUrl'),
+      this.renderOpenAIProtocolSelect(s),
+    ]);
+  }
+
+  private renderOpenAIProtocolSelect(s: ReturnType<typeof getStyles>): m.Children {
+    const protocol =
+      this.form.connection.openaiProtocol ||
+      (this.form.type === 'openai' ? 'responses' : 'chat_completions');
+    return m('div', {style: s.formField}, [
+      m('label', {style: s.formLabel}, 'OpenAI Protocol'),
+      m(
+        'select',
+        {
+          style: s.formSelect,
+          value: protocol,
+          onchange: (e: Event) => {
+            this.form.connection.openaiProtocol = (e.target as HTMLSelectElement)
+              .value as OpenAIProtocol;
+          },
+        },
+        [
+          m('option', {value: 'responses'}, 'Responses'),
+          m('option', {value: 'chat_completions'}, 'Chat Completions'),
+        ],
+      ),
+    ]);
+  }
+
+  private renderConnectionInput(
+    s: ReturnType<typeof getStyles>,
+    field: string,
+    labelOverride?: string,
+  ): m.Children {
+    const meta = CONNECTION_FIELD_LABELS[field] || {
+      label: field,
+      type: 'text',
+      placeholder: '',
+    };
+    const conn = this.form.connection as Record<string, string>;
+    return m('div', {key: field, style: s.formField}, [
+      m('label', {style: s.formLabel}, labelOverride || meta.label),
+      m(`input[type=${meta.type}]`, {
+        style: s.formInput,
+        value: conn[field] || '',
+        oninput: (e: Event) => {
+          conn[field] = (e.target as HTMLInputElement).value;
+        },
+        placeholder: meta.placeholder,
+      }),
+    ]);
   }
 
   private renderBedrockConnection(s: ReturnType<typeof getStyles>): m.Children {

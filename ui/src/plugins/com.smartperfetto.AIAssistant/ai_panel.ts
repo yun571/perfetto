@@ -114,6 +114,7 @@ import {
   getFloatingState,
   updateFloatingState,
 } from './ai_floating_state';
+import {providerRuntimeLabel} from './provider_types';
 
 const DEBUG_AI_PANEL = false;
 
@@ -1170,9 +1171,9 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     }
 
     const providerLabel = this.serverStatus.connected
-      ? this.serverStatus.runtime === 'agentv3'
-        ? 'Claude Agent'
-        : 'Legacy Agent'
+      ? this.serverStatus.runtime
+        ? providerRuntimeLabel(this.serverStatus.runtime)
+        : 'AI Agent'
       : 'Backend';
     const isConnected = this.serverStatus.connected;
     // Check backend availability: engine in HTTP_RPC mode, OR backend upload completed/in-progress
@@ -2198,7 +2199,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                           apiKey:
                             this.state.settings.backendApiKey || undefined,
                           compact: true,
-                          onActivate: () => this.refreshServerStatus(),
+                          onActivate: () => this.onProviderSelectionChange(),
                         }),
                         m('div.ai-input-divider'),
                         this.state.isLoading
@@ -2409,6 +2410,23 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
         timestamp: Date.now(),
       });
     }
+    m.redraw();
+  }
+
+  private onProviderSelectionChange(): void {
+    const hadSession = !!this.state.agentSessionId;
+    if (hadSession) {
+      this.state.agentSessionId = null;
+      this.state.agentRunId = null;
+      this.clearAgentObservability();
+      this.addMessage({
+        id: this.generateId(),
+        role: 'system',
+        content: '已切换 AI Provider / SDK Runtime，将开始新会话。',
+        timestamp: Date.now(),
+      });
+    }
+    this.refreshServerStatus();
     m.redraw();
   }
 

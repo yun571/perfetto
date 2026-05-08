@@ -403,10 +403,9 @@ export interface PinnedResult {
 /**
  * AI service provider settings.
  * NOTE: Legacy fields (provider, ollama*, openai*, deepseek*) are kept for
- * backward compatibility with existing localStorage data. The primary runtime
- * is agentv3 (Claude Agent SDK) — AI model/provider is configured server-side
- * via backend/.env, or through local Claude Code auth/config for source runs.
- * The frontend only needs backendUrl and backendApiKey; backendApiKey is
+ * backward compatibility with existing localStorage data. The actual agent SDK
+ * runtime is configured server-side via Provider Manager or backend/.env. The
+ * frontend only needs backendUrl and backendApiKey; backendApiKey is
  * SmartPerfetto backend auth (SMARTPERFETTO_API_KEY), not an LLM provider key.
  */
 export interface AISettings {
@@ -427,7 +426,7 @@ export interface AISettings {
  */
 export interface ServerStatus {
   connected: boolean;
-  runtime?: 'agentv3' | 'agentv2';
+  runtime?: 'claude-agent-sdk' | 'openai-agents-sdk';
   model?: string;
   configured?: boolean;
   environment?: string;
