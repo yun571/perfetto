@@ -62,6 +62,7 @@ import {switchFloatingMode} from './ai_transient_state';
 // ── Layout constants ────────────────────────────────────────────────────
 
 const HOST_DIV_ID = 'smartperfetto-floating-window-host';
+const UI_MAIN_SELECTOR = '.pf-ui-main';
 
 const TITLEBAR_HEIGHT = 36;
 const RESIZE_HANDLE_SIZE = 18;
@@ -71,6 +72,10 @@ const DRAG_MIN_VISIBLE_X = 100;
 const DRAG_TITLEBAR_REACH = 80;
 /** Viewport-edge margin applied to max size. */
 const VIEWPORT_MARGIN = 24;
+// Perfetto popups (including the Timeline Sync statusbar popup) render in
+// `.pf-popup-portal` at z-index 10. Keep the floating AI host one layer below
+// so clicking Timeline Sync always places its popup above this window.
+const FLOATING_WINDOW_Z_INDEX = 9;
 
 const BTN_BG_IDLE = 'rgba(255,255,255,0.12)';
 const BTN_BG_HOVER = 'rgba(255,255,255,0.22)';
@@ -94,7 +99,7 @@ const STYLES = {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    z-index: 90;
+    z-index: ${FLOATING_WINDOW_Z_INDEX};
     font-family: 'Roboto', sans-serif;
   `,
   // Title bar uses Perfetto's sidebar surface color (deep slate blue) so the
@@ -330,7 +335,9 @@ class FloatingWindow implements m.ClassComponent<FloatingWindowAttrs> {
   oncreate() {
     // Register module-level dismiss callback so startGesture() can close
     // the snap menu even though it calls stopPropagation().
-    dismissLayoutMenu = () => { this.showLayoutMenu = false; };
+    dismissLayoutMenu = () => {
+      this.showLayoutMenu = false;
+    };
   }
 
   onremove() {
@@ -369,15 +376,15 @@ class FloatingWindow implements m.ClassComponent<FloatingWindowAttrs> {
         // Layout dropdown trigger — Windows Snap Assist style presets.
         m('button', {
           'data-layout-trigger': 'true',
-          style: STYLES.iconBtn,
-          title: '预设布局（左半屏 / 右半屏 / 最大化等）',
-          onclick: () => {
+          'style': STYLES.iconBtn,
+          'title': '预设布局（左半屏 / 右半屏 / 最大化等）',
+          'onclick': () => {
             this.showLayoutMenu = !this.showLayoutMenu;
           },
-          onmouseover: (e: MouseEvent) => {
+          'onmouseover': (e: MouseEvent) => {
             (e.currentTarget as HTMLElement).style.background = BTN_BG_HOVER;
           },
-          onmouseout: (e: MouseEvent) => {
+          'onmouseout': (e: MouseEvent) => {
             (e.currentTarget as HTMLElement).style.background = BTN_BG_IDLE;
           },
         }, [
@@ -416,7 +423,7 @@ class FloatingWindow implements m.ClassComponent<FloatingWindowAttrs> {
       // ── Layout dropdown menu ──
       this.showLayoutMenu ? m('div', {
         'data-layout-menu': 'true',
-        style: LAYOUT_MENU_STYLES.menu,
+        'style': LAYOUT_MENU_STYLES.menu,
       }, FLOATING_SNAP_LAYOUTS.map((opt) =>
         m('button', {
           key: opt.id,
@@ -531,8 +538,26 @@ export function locateFloatingWindow(): void {
 function createHostDiv(): HTMLDivElement {
   const div = document.createElement('div');
   div.id = HOST_DIV_ID;
-  document.body.appendChild(div);
+  getHostParent().appendChild(div);
   return div;
+}
+
+/**
+ * Perfetto's fullscreen modal is rendered inside `.pf-ui-main`, whose CSS uses
+ * `isolation: isolate`. Mount the SmartPerfetto host under that stable root
+ * instead of directly under `body`, so the floating window can remain visible
+ * while still sorting below in-app popups and modals by z-index.
+ */
+function getHostParent(): HTMLElement {
+  const uiMain = document.querySelector(UI_MAIN_SELECTOR);
+  return uiMain instanceof HTMLElement ? uiMain : document.body;
+}
+
+function ensureHostParent(hostDiv: HTMLElement): void {
+  const hostParent = getHostParent();
+  if (hostDiv.parentElement !== hostParent) {
+    hostParent.appendChild(hostDiv);
+  }
 }
 
 // ── Dock CSS variables (sidebar/bottom margin push) ────────────────────
@@ -587,9 +612,11 @@ function clearDockSpace(): void {
  */
 export function setupFloatingWindow(trace: Trace): FloatingWindowHandle {
   // Reuse an existing host if a previous trace left one behind (defensive),
-  // otherwise create a fresh div and append it to document.body.
+  // otherwise create a fresh div. Keep it under `.pf-ui-main` so Perfetto
+  // popups/modals and the SmartPerfetto host share one stacking context.
   const hostDiv: HTMLElement =
     document.getElementById(HOST_DIV_ID) ?? createHostDiv();
+  ensureHostParent(hostDiv);
   // Always start from a clean slate — m.mount(el, null) is the official
   // unmount path and also detaches any prior auto-redraw subscription.
   m.mount(hostDiv, null);
