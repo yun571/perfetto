@@ -45,7 +45,14 @@ describe('BackendUploader request context', () => {
   it('sends X-Window-Id on file uploads', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({
       success: true,
-      trace: {id: 'trace-a', port: 9817, leaseId: 'lease-a'},
+      trace: {
+        id: 'trace-a',
+        port: 9817,
+        leaseId: 'lease-a',
+        leaseMode: 'shared',
+        leaseModeReason: 'frontend_interactive',
+        leaseQueueLength: 2,
+      },
     }));
 
     const result = await new BackendUploader('http://backend').upload({
@@ -59,9 +66,15 @@ describe('BackendUploader request context', () => {
       traceId: 'trace-a',
       port: 9817,
       leaseId: 'lease-a',
+      leaseMode: 'shared',
+      leaseModeReason: 'frontend_interactive',
+      leaseQueueLength: 2,
       rpcTarget: {
         mode: 'backend-lease-proxy',
         leaseId: 'lease-a',
+        leaseMode: 'shared',
+        leaseModeReason: 'frontend_interactive',
+        leaseQueueLength: 2,
         statusUrl: expect.stringContaining('/api/tp/lease-a/status?'),
         websocketUrl: expect.stringContaining('/api/tp/lease-a/websocket?'),
       },
@@ -90,7 +103,13 @@ describe('BackendUploader request context', () => {
   it('accepts lease-only upload responses for backend proxy mode', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({
       success: true,
-      trace: {id: 'trace-lease-only', leaseId: 'lease-only'},
+      trace: {
+        id: 'trace-lease-only',
+        leaseId: 'lease-only',
+        leaseMode: 'isolated',
+        leaseModeReason: 'full_analysis',
+        leaseQueueLength: 0,
+      },
     }));
 
     const result = await new BackendUploader('https://backend.example/base').upload({
@@ -103,7 +122,9 @@ describe('BackendUploader request context', () => {
       success: true,
       traceId: 'trace-lease-only',
       leaseId: 'lease-only',
+      leaseMode: 'isolated',
       rpcTarget: {
+        displayName: 'backend isolated lease lease-on',
         statusUrl: expect.stringContaining('https://backend.example/base/api/tp/lease-only/status?'),
         websocketUrl: expect.stringContaining('wss://backend.example/base/api/tp/lease-only/websocket?'),
       },

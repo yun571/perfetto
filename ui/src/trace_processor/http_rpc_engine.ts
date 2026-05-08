@@ -31,6 +31,9 @@ export interface HttpRpcTarget {
   host?: string;
   port?: string;
   leaseId?: string;
+  leaseMode?: 'shared' | 'isolated' | string;
+  leaseModeReason?: string;
+  leaseQueueLength?: number;
   statusUrl: string;
   websocketUrl: string;
   displayName?: string;

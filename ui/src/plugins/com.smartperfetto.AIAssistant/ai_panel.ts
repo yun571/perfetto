@@ -752,7 +752,16 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
   private rpcModeDescription(): string {
     const target = HttpRpcEngine.getCurrentTarget();
     if (target.mode === 'backend-lease-proxy') {
-      return `后端 Lease 代理 (${target.leaseId ?? 'unknown'})`;
+      const modeText =
+        target.leaseMode === 'isolated'
+          ? '独立'
+          : target.leaseMode === 'shared'
+            ? '共享'
+            : '未知';
+      const queueText = typeof target.leaseQueueLength === 'number'
+        ? `，队列 ${target.leaseQueueLength}`
+        : '';
+      return `后端 ${modeText} Lease 代理 (${target.leaseId ?? 'unknown'}${queueText})`;
     }
     return `HTTP RPC (端口 ${target.port ?? HttpRpcEngine.rpcPort})`;
   }
@@ -814,7 +823,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
         this.addMessage({
           id: this.generateId(),
           role: 'assistant',
-          content: `✅ **AI 后端已连接**\n\nAI 分析后端已就绪，可以开始分析。\n\n试试问我：\n- 这个 Trace 有什么性能问题？\n- 帮我分析启动耗时\n- 有没有卡顿？`,
+          content: `✅ **AI 后端已连接**\n\nTrace 已通过 ${this.rpcModeDescription()} 加载，AI 分析后端已就绪。\n\n试试问我：\n- 这个 Trace 有什么性能问题？\n- 帮我分析启动耗时\n- 有没有卡顿？`,
           timestamp: Date.now(),
         });
         this.saveCurrentSession();

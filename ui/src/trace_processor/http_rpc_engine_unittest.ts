@@ -35,17 +35,21 @@ describe('HttpRpcEngine target selection', () => {
     HttpRpcEngine.setRpcTarget({
       mode: 'backend-lease-proxy',
       leaseId: 'lease-a',
+      leaseMode: 'shared',
+      leaseQueueLength: 4,
       statusUrl: 'http://backend/api/tp/lease-a/status',
       websocketUrl: 'ws://backend/api/tp/lease-a/websocket',
-      displayName: 'backend lease lease-a',
+      displayName: 'backend shared lease lease-a',
     });
 
     expect(HttpRpcEngine.getCurrentTarget()).toMatchObject({
       mode: 'backend-lease-proxy',
       leaseId: 'lease-a',
+      leaseMode: 'shared',
+      leaseQueueLength: 4,
       statusUrl: 'http://backend/api/tp/lease-a/status',
       websocketUrl: 'ws://backend/api/tp/lease-a/websocket',
     });
-    expect(HttpRpcEngine.hostAndPort).toBe('backend lease lease-a');
+    expect(HttpRpcEngine.hostAndPort).toBe('backend shared lease lease-a');
   });
 });

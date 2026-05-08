@@ -22,6 +22,9 @@ export interface BackendUploadResult {
   traceId?: string;
   port?: number;
   leaseId?: string;
+  leaseMode?: string;
+  leaseModeReason?: string;
+  leaseQueueLength?: number;
   rpcTarget?: HttpRpcTarget;
   error?: string;
 }
@@ -236,8 +239,18 @@ export class BackendUploader {
     id?: string;
     port?: number;
     leaseId?: string;
+    leaseMode?: string;
+    leaseModeReason?: string;
+    leaseQueueLength?: number;
   }, label: string): BackendUploadResult {
-    const {id: traceId, port, leaseId} = trace;
+    const {
+      id: traceId,
+      port,
+      leaseId,
+      leaseMode,
+      leaseModeReason,
+      leaseQueueLength,
+    } = trace;
     if (!port && !leaseId) {
       return {
         success: false,
@@ -246,11 +259,16 @@ export class BackendUploader {
     }
 
     const rpcTarget = leaseId
-      ? buildSmartPerfettoTraceProcessorProxyTarget(this.backendUrl, leaseId)
+      ? buildSmartPerfettoTraceProcessorProxyTarget(this.backendUrl, leaseId, {
+        leaseMode,
+        leaseModeReason,
+        leaseQueueLength,
+      })
       : undefined;
     console.log(
       `[BackendUploader] ${label} successful! traceId=${traceId}, `
-        + `port=${port ?? 'n/a'}, leaseId=${leaseId ?? 'n/a'}`,
+        + `port=${port ?? 'n/a'}, leaseId=${leaseId ?? 'n/a'}, `
+        + `leaseMode=${leaseMode ?? 'n/a'}, queue=${leaseQueueLength ?? 'n/a'}`,
     );
 
     return {
@@ -258,6 +276,9 @@ export class BackendUploader {
       traceId,
       port,
       leaseId,
+      leaseMode,
+      leaseModeReason,
+      leaseQueueLength,
       rpcTarget,
     };
   }

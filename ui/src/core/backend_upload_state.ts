@@ -6,6 +6,9 @@ export interface BackendUploadSnapshot {
   traceId?: string;
   port?: number;
   leaseId?: string;
+  leaseMode?: string;
+  leaseModeReason?: string;
+  leaseQueueLength?: number;
   rpcTarget?: HttpRpcTarget;
   state: BackendUploadPhase;
   error?: string;
@@ -39,6 +42,9 @@ export function setBackendUploadState(next: BackendUploadSnapshot): void {
     traceId: next.traceId,
     port: next.port,
     leaseId: next.leaseId,
+    leaseMode: next.leaseMode,
+    leaseModeReason: next.leaseModeReason,
+    leaseQueueLength: next.leaseQueueLength,
     rpcTarget: next.rpcTarget,
     state: next.state,
     error: next.error,

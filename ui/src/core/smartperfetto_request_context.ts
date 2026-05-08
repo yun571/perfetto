@@ -211,6 +211,11 @@ export function buildSmartPerfettoWorkspaceApiUrl(
 export function buildSmartPerfettoTraceProcessorProxyTarget(
   backendUrl: string,
   leaseId: string,
+  leaseStatus: {
+    leaseMode?: 'shared' | 'isolated' | string;
+    leaseModeReason?: string;
+    leaseQueueLength?: number;
+  } = {},
 ) {
   const context = getSmartPerfettoRequestContext();
   const encodedLeaseId = encodeURIComponent(leaseId);
@@ -230,9 +235,12 @@ export function buildSmartPerfettoTraceProcessorProxyTarget(
   return {
     mode: 'backend-lease-proxy' as const,
     leaseId,
+    leaseMode: leaseStatus.leaseMode,
+    leaseModeReason: leaseStatus.leaseModeReason,
+    leaseQueueLength: leaseStatus.leaseQueueLength,
     statusUrl: `${httpBase}/status${suffix}`,
     websocketUrl: `${websocketBase}/api/tp/${encodedLeaseId}/websocket${suffix}`,
-    displayName: `backend lease ${leaseId.slice(0, 8)}`,
+    displayName: `backend ${leaseStatus.leaseMode ?? 'unknown'} lease ${leaseId.slice(0, 8)}`,
     headers: buildSmartPerfettoContextHeaders(),
     credentials: 'include' as const,
   };

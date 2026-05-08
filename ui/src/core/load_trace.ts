@@ -190,13 +190,17 @@ async function createEngine(
             }
             console.log(
               `[AutoRPC] Background upload complete, traceId=${result.traceId}, `
-                + `port=${result.port ?? 'n/a'}, leaseId=${result.leaseId ?? 'n/a'}`,
+                + `port=${result.port ?? 'n/a'}, leaseId=${result.leaseId ?? 'n/a'}, `
+                + `leaseMode=${result.leaseMode ?? 'n/a'}, queue=${result.leaseQueueLength ?? 'n/a'}`,
             );
             setBackendUploadState({
               state: 'ready',
               traceId: result.traceId ?? '',
               port: result.port,
               leaseId: result.leaseId,
+              leaseMode: result.leaseMode,
+              leaseModeReason: result.leaseModeReason,
+              leaseQueueLength: result.leaseQueueLength,
               rpcTarget: result.rpcTarget,
             });
           } else {
