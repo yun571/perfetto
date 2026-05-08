@@ -48,6 +48,37 @@ export function generateId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+const WINDOW_ID_KEY = 'smartperfetto-window-id';
+
+interface SessionsStorageEnvelope extends SessionsStorage {
+  _meta?: {
+    mtimeMs: number;
+    revision: number;
+  };
+}
+
+function createWindowId(): string {
+  return `win-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+export function getSmartPerfettoWindowId(): string {
+  try {
+    const existing = sessionStorage.getItem(WINDOW_ID_KEY);
+    if (existing) return existing;
+    const next = createWindowId();
+    sessionStorage.setItem(WINDOW_ID_KEY, next);
+    return next;
+  } catch {
+    return createWindowId();
+  }
+}
+
+export function getPendingBackendTraceStorageKey(
+  windowId = getSmartPerfettoWindowId(),
+): string {
+  return `${PENDING_BACKEND_TRACE_KEY}:${windowId}`;
+}
+
 /**
  * Session Manager class for handling AI session persistence.
  *
@@ -58,6 +89,9 @@ export function generateId(): string {
  * - Cleanup of old sessions
  */
 export class SessionManager {
+  private sessionsStorageMtimeMs = 0;
+  private sessionsStorageRevision = 0;
+
   /**
    * Load AI settings from localStorage.
    */
@@ -170,15 +204,33 @@ export class SessionManager {
    * Load all Sessions storage from localStorage.
    */
   loadSessionsStorage(): SessionsStorage {
+    const parsed = this.parseSessionsStorage(localStorage.getItem(SESSIONS_KEY));
+    this.sessionsStorageMtimeMs = parsed.mtimeMs;
+    this.sessionsStorageRevision = parsed.revision;
+    return parsed.storage;
+  }
+
+  private parseSessionsStorage(raw: string | null): {
+    storage: SessionsStorage;
+    mtimeMs: number;
+    revision: number;
+  } {
     try {
-      const stored = localStorage.getItem(SESSIONS_KEY);
-      if (stored) {
-        return JSON.parse(stored);
-      }
+      if (!raw) return {storage: {byTrace: {}}, mtimeMs: 0, revision: 0};
+      const parsed = JSON.parse(raw) as SessionsStorageEnvelope | null;
+      const byTrace = parsed && typeof parsed.byTrace === 'object' && parsed.byTrace
+        ? parsed.byTrace
+        : {};
+      const meta = parsed && typeof parsed === 'object' ? parsed._meta : undefined;
+      return {
+        storage: {byTrace},
+        mtimeMs: Number(meta?.mtimeMs) || 0,
+        revision: Number(meta?.revision) || 0,
+      };
     } catch {
       // Ignore errors
     }
-    return { byTrace: {} };
+    return {storage: {byTrace: {}}, mtimeMs: 0, revision: 0};
   }
 
   /**
@@ -214,21 +266,77 @@ export class SessionManager {
     });
   }
 
+  private mergeSessionsStorage(base: SessionsStorage, incoming: SessionsStorage): SessionsStorage {
+    const merged: SessionsStorage = {byTrace: {}};
+    for (const fingerprint in base.byTrace) {
+      merged.byTrace[fingerprint] = [...base.byTrace[fingerprint]];
+    }
+
+    for (const fingerprint in incoming.byTrace) {
+      if (!merged.byTrace[fingerprint]) {
+        merged.byTrace[fingerprint] = [];
+      }
+
+      for (const session of incoming.byTrace[fingerprint]) {
+        const index = merged.byTrace[fingerprint].findIndex(
+          existing => existing.sessionId === session.sessionId,
+        );
+        if (index === -1) {
+          merged.byTrace[fingerprint].push(session);
+        } else {
+          merged.byTrace[fingerprint][index] = session;
+        }
+      }
+    }
+
+    return merged;
+  }
+
+  private buildSessionsEnvelope(
+    storage: SessionsStorage,
+    revisionBase: number,
+  ): SessionsStorageEnvelope {
+    return {
+      ...storage,
+      _meta: {
+        mtimeMs: Date.now(),
+        revision: revisionBase + 1,
+      },
+    };
+  }
+
   /**
    * Save all Sessions storage to localStorage.
    * Includes size protection to avoid exceeding browser storage limits.
    */
   saveSessionsStorage(storage: SessionsStorage): void {
     try {
+      const current = this.parseSessionsStorage(localStorage.getItem(SESSIONS_KEY));
+      const hasConcurrentWrite =
+        current.revision > this.sessionsStorageRevision ||
+        current.mtimeMs > this.sessionsStorageMtimeMs;
+      const storageToSave = hasConcurrentWrite
+        ? this.mergeSessionsStorage(current.storage, storage)
+        : storage;
+      const revisionBase = Math.max(current.revision, this.sessionsStorageRevision);
+
       // F4: Create a trimmed copy to reduce storage size
       const trimmedStorage: SessionsStorage = { byTrace: {} };
-      for (const fingerprint in storage.byTrace) {
-        trimmedStorage.byTrace[fingerprint] = storage.byTrace[fingerprint].map(session => ({
+      for (const fingerprint in storageToSave.byTrace) {
+        trimmedStorage.byTrace[fingerprint] = storageToSave.byTrace[fingerprint].map(session => ({
           ...session,
           messages: this.trimStorageMessages(session.messages),
         }));
       }
-      const serialized = JSON.stringify(trimmedStorage);
+      let envelope = this.buildSessionsEnvelope(trimmedStorage, revisionBase);
+      const serialize = (): string => JSON.stringify(envelope);
+      const persist = (serialized: string): void => {
+        localStorage.setItem(SESSIONS_KEY, serialized);
+        this.sessionsStorageMtimeMs = envelope._meta?.mtimeMs || 0;
+        this.sessionsStorageRevision = envelope._meta?.revision || 0;
+      };
+
+      let serialized = serialize();
       const sizeBytes = new Blob([serialized]).size;
       const MAX_STORAGE_BYTES = 4 * 1024 * 1024; // 4MB safety limit
 
@@ -259,16 +367,18 @@ export class SessionManager {
               delete trimmedStorage.byTrace[entry.fingerprint];
             }
           }
-          const evictedSerialized = JSON.stringify(trimmedStorage);
+          envelope = this.buildSessionsEnvelope(trimmedStorage, revisionBase);
+          const evictedSerialized = serialize();
           if (new Blob([evictedSerialized]).size <= MAX_STORAGE_BYTES) {
-            localStorage.setItem(SESSIONS_KEY, evictedSerialized);
+            persist(evictedSerialized);
             return;
           }
         }
         // If still too large after trimming all, save what we have
-        localStorage.setItem(SESSIONS_KEY, JSON.stringify(trimmedStorage));
+        envelope = this.buildSessionsEnvelope(trimmedStorage, revisionBase);
+        persist(serialize());
       } else {
-        localStorage.setItem(SESSIONS_KEY, serialized);
+        persist(serialized);
       }
     } catch (e) {
       console.warn('[SessionManager] Failed to save sessions storage:', e);
@@ -453,14 +563,15 @@ export class SessionManager {
    */
   storePendingBackendTrace(traceId: string, port: number): void {
     try {
-      localStorage.setItem(
-        PENDING_BACKEND_TRACE_KEY,
+      sessionStorage.setItem(
+        getPendingBackendTraceStorageKey(),
         JSON.stringify({
           traceId,
           port,
           timestamp: Date.now(),
         })
       );
+      localStorage.removeItem(PENDING_BACKEND_TRACE_KEY);
     } catch {
       console.log('[SessionManager] Failed to store pending trace');
     }
@@ -473,22 +584,32 @@ export class SessionManager {
    */
   recoverPendingBackendTrace(currentPort: number): string | null {
     try {
-      const stored = localStorage.getItem(PENDING_BACKEND_TRACE_KEY);
+      const scopedKey = getPendingBackendTraceStorageKey();
+      let stored = sessionStorage.getItem(scopedKey);
+      let legacyStorage = false;
+      if (!stored) {
+        stored = localStorage.getItem(PENDING_BACKEND_TRACE_KEY);
+        legacyStorage = Boolean(stored);
+      }
       if (!stored) return null;
 
       const data = JSON.parse(stored);
+      const clearPending = () => {
+        sessionStorage.removeItem(scopedKey);
+        localStorage.removeItem(PENDING_BACKEND_TRACE_KEY);
+      };
 
       // Check if the stored data matches current port and is recent (within 60 seconds)
       if (data.port === currentPort && (Date.now() - data.timestamp) < 60000) {
         // Clear the pending data after recovery
-        localStorage.removeItem(PENDING_BACKEND_TRACE_KEY);
+        clearPending();
         console.log('[SessionManager] Recovered and cleared pending backend trace');
         return data.traceId;
       }
 
       // If too old or port mismatch, clear it
-      if ((Date.now() - data.timestamp) > 60000) {
-        localStorage.removeItem(PENDING_BACKEND_TRACE_KEY);
+      if ((Date.now() - data.timestamp) > 60000 || legacyStorage) {
+        clearPending();
         console.log('[SessionManager] Cleared stale pending backend trace');
       }
 

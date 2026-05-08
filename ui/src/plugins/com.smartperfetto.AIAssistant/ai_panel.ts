@@ -63,7 +63,6 @@ import {
   InterventionState,
   StreamingFlowState,
   DEFAULT_SETTINGS,
-  PENDING_BACKEND_TRACE_KEY,
   PRESET_QUESTIONS,
   COMPARISON_PRESET_QUESTIONS,
   SelectionContext,
@@ -689,20 +688,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
       // 存储 traceId 用于后续注册
       if (uploadResult.traceId) {
         this.state.backendTraceId = uploadResult.traceId;
-        // 存储到 localStorage 以便在 reload 后恢复
-        try {
-          localStorage.setItem(
-            PENDING_BACKEND_TRACE_KEY,
-            JSON.stringify({
-              traceId: uploadResult.traceId,
-              port: uploadResult.port,
-              timestamp: Date.now(),
-            }),
-          );
-        } catch (e) {
-          if (DEBUG_AI_PANEL)
-            console.log('[AIPanel] Failed to store pending trace:', e);
-        }
+        sessionManager.storePendingBackendTrace(uploadResult.traceId, uploadResult.port);
       }
 
       // The backend has already loaded the trace into trace_processor_shell.
@@ -726,32 +712,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
    * 用于在 trace reload 后恢复上传时设置的 traceId
    */
   private recoverPendingBackendTrace(currentPort: number): string | null {
-    try {
-      const stored = localStorage.getItem(PENDING_BACKEND_TRACE_KEY);
-      if (!stored) return null;
-
-      const data = JSON.parse(stored);
-
-      // Check if the stored data matches current port and is recent (within 60 seconds)
-      if (data.port === currentPort && Date.now() - data.timestamp < 60000) {
-        // Clear the pending data after recovery
-        localStorage.removeItem(PENDING_BACKEND_TRACE_KEY);
-        if (DEBUG_AI_PANEL)
-          console.log('[AIPanel] Recovered and cleared pending backend trace');
-        return data.traceId;
-      }
-
-      // If too old or port mismatch, clear it
-      if (Date.now() - data.timestamp > 60000) {
-        localStorage.removeItem(PENDING_BACKEND_TRACE_KEY);
-        if (DEBUG_AI_PANEL)
-          console.log('[AIPanel] Cleared stale pending backend trace');
-      }
-
-      return null;
-    } catch {
-      return null;
-    }
+    return sessionManager.recoverPendingBackendTrace(currentPort);
   }
 
   /**
