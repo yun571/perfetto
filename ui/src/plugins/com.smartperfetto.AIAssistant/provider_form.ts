@@ -761,7 +761,7 @@ export class ProviderForm implements m.ClassComponent<ProviderFormAttrs> {
     const protocol =
       this.form.connection.openaiProtocol ||
       (this.form.type === 'openai' ? 'responses' : 'chat_completions');
-    return m('div', {style: s.formField}, [
+    return m('div', {key: 'openaiProtocol', style: s.formField}, [
       m('label', {style: s.formLabel}, 'OpenAI Protocol'),
       m(
         'select',
