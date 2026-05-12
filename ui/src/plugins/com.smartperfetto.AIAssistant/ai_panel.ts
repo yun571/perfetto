@@ -286,6 +286,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     size?: number;
   }> = [];
   private availableAnalysisResults: AnalysisResultPickerItem[] = [];
+  private resultVisibilityUpdatingIds = new Set<string>();
   // Debounced session save (P1-8): coalesce rapid addMessage() calls
   private saveSessionTimer: ReturnType<typeof setTimeout> | null = null;
   private beforeUnloadHandler: (() => void) | null = null;
@@ -891,6 +892,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     this.state.selectedResultBaselineId = null;
     this.state.selectedResultCandidateIds = new Set();
     this.availableAnalysisResults = [];
+    this.resultVisibilityUpdatingIds.clear();
     this.clearAgentObservability();
     this.resetInterventionState();
 
@@ -7686,6 +7688,62 @@ Output MUST follow this exact markdown structure:
     m.redraw();
   }
 
+  private async updateAnalysisResultVisibility(
+    snapshotId: string,
+    visibility: 'private' | 'workspace',
+  ): Promise<void> {
+    if (this.resultVisibilityUpdatingIds.has(snapshotId)) return;
+    this.resultVisibilityUpdatingIds.add(snapshotId);
+    m.redraw();
+
+    try {
+      const url = buildSmartPerfettoWorkspaceApiUrl(
+        this.state.settings.backendUrl,
+        'analysis-results',
+        `/${encodeURIComponent(snapshotId)}`,
+      );
+      const response = await this.fetchBackend(url, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({visibility}),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const updated = this.normalizeAnalysisResultItem(data.snapshot);
+      if (!updated) {
+        await this.fetchAnalysisResults();
+        return;
+      }
+
+      this.availableAnalysisResults = this.availableAnalysisResults.map((item) =>
+        item.id === updated.id ? updated : item,
+      );
+      if (this.state.latestAnalysisSnapshot?.snapshotId === updated.id) {
+        this.state.latestAnalysisSnapshot = {
+          ...this.state.latestAnalysisSnapshot,
+          visibility: updated.visibility,
+        };
+      }
+    } catch (error) {
+      console.warn('[AIPanel] Failed to update analysis result visibility:', error);
+      this.addMessage({
+        id: this.generateId(),
+        role: 'system',
+        content:
+          error instanceof Error
+            ? `更新分析结果可见性失败: ${error.message}`
+            : '更新分析结果可见性失败。',
+        timestamp: Date.now(),
+      });
+    } finally {
+      this.resultVisibilityUpdatingIds.delete(snapshotId);
+      m.redraw();
+    }
+  }
+
   private prepareSelectedResultComparison(): void {
     const baseline = this.availableAnalysisResults.find(
       (item) => item.id === this.state.selectedResultBaselineId,
@@ -7807,6 +7865,7 @@ Output MUST follow this exact markdown structure:
     const isCandidate = this.state.selectedResultCandidateIds.has(item.id);
     const isCurrent =
       item.id === this.state.latestAnalysisSnapshot?.snapshotId;
+    const isVisibilityUpdating = this.resultVisibilityUpdatingIds.has(item.id);
     const metricCount = item.metrics?.length ?? 0;
     const evidenceCount = item.evidenceRefs?.length ?? 0;
 
@@ -7875,6 +7934,18 @@ Output MUST follow this exact markdown structure:
             },
             '候选',
           ),
+          item.visibility === 'private'
+            ? m(
+                'button.ai-result-picker-role-btn',
+                {
+                  disabled: isVisibilityUpdating,
+                  onclick: () =>
+                    this.updateAnalysisResultVisibility(item.id, 'workspace'),
+                  title: '设为 workspace 可见',
+                },
+                isVisibilityUpdating ? '...' : '共享',
+              )
+            : null,
         ]),
       ],
     );
