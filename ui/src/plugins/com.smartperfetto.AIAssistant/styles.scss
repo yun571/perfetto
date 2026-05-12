@@ -4208,6 +4208,175 @@ tr.detail-row {
   font-size: 13px;
 }
 
+.ai-result-picker {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.ai-result-picker-list {
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.ai-result-picker-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+
+  &:hover {
+    background: tint(var(--pf-color-accent), 8%);
+  }
+
+  &.baseline {
+    border-color: tint(var(--pf-color-accent), 35%);
+    background: tint(var(--pf-color-accent), 12%);
+  }
+
+  &.candidate {
+    border-color: var(--chat-border);
+    background: var(--chat-bg-secondary);
+  }
+}
+
+.ai-result-picker-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ai-result-picker-item-name {
+  min-width: 0;
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--chat-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-result-picker-query {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--chat-text-secondary);
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.ai-result-picker-item-meta,
+.ai-result-picker-coverage {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--chat-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.ai-result-picker-pill {
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  color: var(--chat-text-secondary);
+  background: var(--chat-bg);
+  border: 1px solid var(--chat-border);
+
+  &.ready {
+    color: var(--chat-success);
+  }
+
+  &.failed {
+    color: var(--chat-error);
+  }
+
+  &.current {
+    color: var(--chat-primary);
+  }
+}
+
+.ai-result-picker-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-result-picker-role-btn,
+.ai-result-picker-primary,
+.ai-result-picker-secondary,
+.ai-result-picker-text-btn {
+  border: 1px solid var(--chat-border);
+  border-radius: 4px;
+  background: var(--chat-bg);
+  color: var(--chat-text);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: tint(var(--pf-color-accent), 10%);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.ai-result-picker-role-btn {
+  height: 24px;
+  padding: 0 7px;
+  font-size: 11px;
+
+  &.active {
+    border-color: tint(var(--pf-color-accent), 35%);
+    background: tint(var(--pf-color-accent), 15%);
+    color: var(--chat-primary);
+  }
+}
+
+.ai-result-picker-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-result-picker-primary,
+.ai-result-picker-secondary,
+.ai-result-picker-text-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.ai-result-picker-primary {
+  border-color: tint(var(--pf-color-accent), 35%);
+  background: tint(var(--pf-color-accent), 15%);
+  color: var(--chat-primary);
+}
+
+.ai-result-picker-selection {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--chat-text-muted);
+}
+
+.ai-result-picker-error {
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--chat-error);
+  font-size: 13px;
+}
+
 // ----------------------------------------------------------------------------
 // Story Reconstruction View
 // ----------------------------------------------------------------------------

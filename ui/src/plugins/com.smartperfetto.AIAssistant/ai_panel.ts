@@ -76,6 +76,7 @@ import {
   SliceCardInfo,
   AreaCardInfo,
   TraceDataset,
+  AnalysisResultPickerItem,
 } from './types';
 // Agent-Driven Architecture v2.0 - Intervention Panel
 import {
@@ -249,6 +250,11 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     showTracePicker: false,
     comparisonTraceLoading: false,
     latestAnalysisSnapshot: null,
+    showResultPicker: false,
+    resultPickerLoading: false,
+    resultPickerError: null,
+    selectedResultBaselineId: null,
+    selectedResultCandidateIds: new Set(),
     // Story Panel
     storyState: createStoryPanelState(),
     // Analysis mode is workspace-scoped so different workspaces keep separate
@@ -279,6 +285,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     uploadedAt?: string;
     size?: number;
   }> = [];
+  private availableAnalysisResults: AnalysisResultPickerItem[] = [];
   // Debounced session save (P1-8): coalesce rapid addMessage() calls
   private saveSessionTimer: ReturnType<typeof setTimeout> | null = null;
   private beforeUnloadHandler: (() => void) | null = null;
@@ -878,6 +885,12 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     this.state.currentSessionId = null;
     this.state.agentSessionId = null; // Reset Agent session for multi-turn dialogue
     this.state.latestAnalysisSnapshot = null;
+    this.state.showResultPicker = false;
+    this.state.resultPickerLoading = false;
+    this.state.resultPickerError = null;
+    this.state.selectedResultBaselineId = null;
+    this.state.selectedResultCandidateIds = new Set();
+    this.availableAnalysisResults = [];
     this.clearAgentObservability();
     this.resetInterventionState();
 
@@ -1023,9 +1036,25 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
               active: !!this.state.referenceTraceId || this.state.showTracePicker,
               onclick: () => {
                 this.state.showTracePicker = true;
+                this.state.showResultPicker = false;
                 this.state.showSessionSidebar = false;
                 this.state.showStorySidebar = false;
                 this.fetchAvailableTraces();
+                m.redraw();
+              },
+            })
+          : null,
+        isInRpcMode
+          ? this.renderHeaderIconButton({
+              icon: 'fact_check',
+              title: '分析结果对比...',
+              active: this.state.showResultPicker,
+              onclick: () => {
+                this.state.showResultPicker = true;
+                this.state.showTracePicker = false;
+                this.state.showSessionSidebar = false;
+                this.state.showStorySidebar = false;
+                this.fetchAnalysisResults();
                 m.redraw();
               },
             })
@@ -1049,6 +1078,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
             if (this.state.showStorySidebar) {
               this.state.showSessionSidebar = false;
               this.state.showTracePicker = false;
+              this.state.showResultPicker = false;
             }
             m.redraw();
           },
@@ -1070,6 +1100,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
             if (this.state.showSessionSidebar) {
               this.state.showStorySidebar = false;
               this.state.showTracePicker = false;
+              this.state.showResultPicker = false;
             }
             m.redraw();
           },
@@ -1318,6 +1349,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
             class:
               isInRpcMode &&
               (this.state.showTracePicker ||
+                this.state.showResultPicker ||
                 this.state.showSessionSidebar ||
                 this.state.showStorySidebar)
                 ? 'with-sidebar'
@@ -2279,6 +2311,9 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
               : null,
             isInRpcMode && this.state.showTracePicker
               ? this.renderTracePicker()
+              : null,
+            isInRpcMode && this.state.showResultPicker
+              ? this.renderResultPicker()
               : null,
           ],
         ), // End of ai-content-wrapper
@@ -3384,6 +3419,9 @@ Click ⚙️ to configure backend connection.`;
       createdAt:
         typeof payload.createdAt === 'number' ? payload.createdAt : Date.now(),
     };
+    if (this.state.showResultPicker) {
+      void this.fetchAnalysisResults();
+    }
   }
 
   private applyAnalysisCompletedSnapshotFallback(data?: any): void {
@@ -7501,6 +7539,345 @@ Output MUST follow this exact markdown structure:
       this.state.comparisonTraceLoading = false;
       m.redraw();
     }
+  }
+
+  /** Fetch persisted analysis-result snapshots for the result picker. */
+  private async fetchAnalysisResults(): Promise<void> {
+    this.state.resultPickerLoading = true;
+    this.state.resultPickerError = null;
+    m.redraw();
+
+    try {
+      const url = new URL(
+        buildSmartPerfettoWorkspaceApiUrl(
+          this.state.settings.backendUrl,
+          'analysis-results',
+        ),
+        window.location.href,
+      );
+      url.searchParams.set('limit', '100');
+
+      const response = await this.fetchBackend(url.toString());
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      this.availableAnalysisResults = (Array.isArray(data.results)
+        ? data.results
+        : [])
+        .map((item: any) => this.normalizeAnalysisResultItem(item))
+        .filter((item: AnalysisResultPickerItem | null): item is AnalysisResultPickerItem =>
+          item !== null,
+        );
+      this.syncResultPickerSelection();
+    } catch (error) {
+      console.warn('[AIPanel] Failed to fetch analysis results:', error);
+      this.availableAnalysisResults = [];
+      this.state.resultPickerError =
+        error instanceof Error ? error.message : 'Failed to load analysis results';
+    } finally {
+      this.state.resultPickerLoading = false;
+      m.redraw();
+    }
+  }
+
+  private normalizeAnalysisResultItem(
+    item: any,
+  ): AnalysisResultPickerItem | null {
+    if (!item || typeof item !== 'object' || typeof item.id !== 'string') {
+      return null;
+    }
+    const metrics = Array.isArray(item.metrics)
+      ? item.metrics
+          .filter((metric: any) => metric && typeof metric === 'object')
+          .map((metric: any) => ({
+            key: String(metric.key || ''),
+            label: String(metric.label || metric.key || ''),
+            group: String(metric.group || 'general'),
+            value:
+              typeof metric.value === 'number' ||
+              typeof metric.value === 'string' ||
+              metric.value === null
+                ? metric.value
+                : null,
+            unit: typeof metric.unit === 'string' ? metric.unit : undefined,
+            confidence:
+              typeof metric.confidence === 'number'
+                ? metric.confidence
+                : undefined,
+          }))
+      : [];
+
+    return {
+      id: item.id,
+      traceId: typeof item.traceId === 'string' ? item.traceId : '',
+      sessionId: typeof item.sessionId === 'string' ? item.sessionId : '',
+      runId: typeof item.runId === 'string' ? item.runId : '',
+      reportId: typeof item.reportId === 'string' ? item.reportId : undefined,
+      createdBy:
+        typeof item.createdBy === 'string' ? item.createdBy : undefined,
+      visibility:
+        typeof item.visibility === 'string' ? item.visibility : 'private',
+      sceneType: typeof item.sceneType === 'string' ? item.sceneType : 'general',
+      title: typeof item.title === 'string' ? item.title : item.id,
+      userQuery:
+        typeof item.userQuery === 'string' ? item.userQuery : '',
+      traceLabel:
+        typeof item.traceLabel === 'string'
+          ? item.traceLabel
+          : typeof item.traceId === 'string'
+            ? item.traceId
+            : '',
+      status: typeof item.status === 'string' ? item.status : 'partial',
+      createdAt:
+        typeof item.createdAt === 'number' ? item.createdAt : Date.now(),
+      expiresAt:
+        typeof item.expiresAt === 'number' ? item.expiresAt : undefined,
+      metrics,
+      evidenceRefs: Array.isArray(item.evidenceRefs) ? item.evidenceRefs : [],
+    };
+  }
+
+  private syncResultPickerSelection(): void {
+    const ids = new Set(this.availableAnalysisResults.map((item) => item.id));
+    const latestId = this.state.latestAnalysisSnapshot?.snapshotId;
+    const currentBaseline = this.state.selectedResultBaselineId;
+
+    if (currentBaseline && !ids.has(currentBaseline)) {
+      this.state.selectedResultBaselineId = null;
+    }
+    if (!this.state.selectedResultBaselineId && latestId && ids.has(latestId)) {
+      this.state.selectedResultBaselineId = latestId;
+    }
+    if (!this.state.selectedResultBaselineId) {
+      this.state.selectedResultBaselineId =
+        this.availableAnalysisResults[0]?.id ?? null;
+    }
+
+    const nextCandidates = new Set<string>();
+    for (const id of this.state.selectedResultCandidateIds) {
+      if (ids.has(id) && id !== this.state.selectedResultBaselineId) {
+        nextCandidates.add(id);
+      }
+    }
+    this.state.selectedResultCandidateIds = nextCandidates;
+  }
+
+  private selectResultBaseline(snapshotId: string): void {
+    this.state.selectedResultBaselineId = snapshotId;
+    if (this.state.selectedResultCandidateIds.has(snapshotId)) {
+      const next = new Set(this.state.selectedResultCandidateIds);
+      next.delete(snapshotId);
+      this.state.selectedResultCandidateIds = next;
+    }
+    m.redraw();
+  }
+
+  private toggleResultCandidate(snapshotId: string): void {
+    if (snapshotId === this.state.selectedResultBaselineId) return;
+    const next = new Set(this.state.selectedResultCandidateIds);
+    if (next.has(snapshotId)) {
+      next.delete(snapshotId);
+    } else {
+      next.add(snapshotId);
+    }
+    this.state.selectedResultCandidateIds = next;
+    m.redraw();
+  }
+
+  private prepareSelectedResultComparison(): void {
+    const baseline = this.availableAnalysisResults.find(
+      (item) => item.id === this.state.selectedResultBaselineId,
+    );
+    const candidates = this.availableAnalysisResults.filter((item) =>
+      this.state.selectedResultCandidateIds.has(item.id),
+    );
+    if (!baseline || candidates.length === 0) return;
+
+    this.addMessage({
+      id: this.generateId(),
+      role: 'system',
+      content:
+        `已选择分析结果对比。\n\n` +
+        `- Baseline: ${baseline.title || baseline.id}\n` +
+        candidates
+          .map((item, index) => `- Candidate ${index + 1}: ${item.title || item.id}`)
+          .join('\n'),
+      timestamp: Date.now(),
+    });
+    this.state.showResultPicker = false;
+    m.redraw();
+  }
+
+  private formatAnalysisResultTime(timestamp: number): string {
+    if (!Number.isFinite(timestamp)) return '';
+    return new Date(timestamp).toLocaleString();
+  }
+
+  private formatAnalysisResultStatus(status: string): string {
+    if (status === 'ready') return 'Ready';
+    if (status === 'failed') return 'Failed';
+    return 'Partial';
+  }
+
+  private renderResultPicker(): m.Vnode {
+    const selectedCount = this.state.selectedResultCandidateIds.size;
+    const canPrepare = !!this.state.selectedResultBaselineId && selectedCount > 0;
+
+    return m('aside.ai-trace-picker-sidebar.ai-result-picker-sidebar', [
+      m('div.ai-trace-picker-sidebar-header', [
+        m('i.pf-icon', 'fact_check'),
+        m('span', '选择分析结果'),
+        m(
+          'button.ai-trace-picker-sidebar-close',
+          {
+            onclick: () => {
+              this.state.showResultPicker = false;
+              m.redraw();
+            },
+            title: '关闭',
+          },
+          m('i.pf-icon', 'close'),
+        ),
+      ]),
+      m('div.ai-trace-picker-sidebar-body', [
+        m('div.ai-result-picker', [
+          this.state.resultPickerLoading
+            ? m('div.ai-trace-picker-loading', '加载分析结果中...')
+            : this.state.resultPickerError
+              ? m('div.ai-result-picker-error', [
+                  m('div', `加载失败: ${this.state.resultPickerError}`),
+                  m(
+                    'button.ai-result-picker-text-btn',
+                    {
+                      onclick: () => this.fetchAnalysisResults(),
+                    },
+                    '重试',
+                  ),
+                ])
+              : m('div.ai-result-picker-list', [
+                  this.availableAnalysisResults.length > 0
+                    ? this.availableAnalysisResults.map((item) =>
+                        this.renderResultPickerItem(item),
+                      )
+                    : m(
+                        'div.ai-trace-picker-empty',
+                        '当前 workspace 还没有可用于对比的分析结果。',
+                      ),
+                ]),
+        ]),
+        this.availableAnalysisResults.length > 0
+          ? m('div.ai-trace-picker-sidebar-actions.ai-result-picker-actions', [
+              m(
+                'button.ai-result-picker-primary',
+                {
+                  disabled: !canPrepare,
+                  onclick: () => this.prepareSelectedResultComparison(),
+                },
+                '选择完成',
+              ),
+              m(
+                'button.ai-result-picker-secondary',
+                {
+                  onclick: () => {
+                    this.state.selectedResultBaselineId =
+                      this.state.latestAnalysisSnapshot?.snapshotId ?? null;
+                    this.state.selectedResultCandidateIds = new Set();
+                    this.syncResultPickerSelection();
+                    m.redraw();
+                  },
+                },
+                '重置',
+              ),
+              m(
+                'span.ai-result-picker-selection',
+                canPrepare
+                  ? `1 baseline · ${selectedCount} candidate`
+                  : '请选择 baseline 和 candidate',
+              ),
+            ])
+          : null,
+      ]),
+    ]);
+  }
+
+  private renderResultPickerItem(item: AnalysisResultPickerItem): m.Vnode {
+    const isBaseline = item.id === this.state.selectedResultBaselineId;
+    const isCandidate = this.state.selectedResultCandidateIds.has(item.id);
+    const isCurrent =
+      item.id === this.state.latestAnalysisSnapshot?.snapshotId;
+    const metricCount = item.metrics?.length ?? 0;
+    const evidenceCount = item.evidenceRefs?.length ?? 0;
+
+    return m(
+      'div.ai-result-picker-item',
+      {
+        key: item.id,
+        class: [
+          isBaseline ? 'baseline' : '',
+          isCandidate ? 'candidate' : '',
+          isCurrent ? 'current' : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      },
+      [
+        m('div.ai-result-picker-item-main', [
+          m('div.ai-result-picker-title-row', [
+            m('div.ai-result-picker-item-name', item.title || item.id),
+            isCurrent
+              ? m('span.ai-result-picker-pill.current', 'Current')
+              : null,
+            m(
+              `span.ai-result-picker-pill.${item.status === 'ready' ? 'ready' : item.status === 'failed' ? 'failed' : 'partial'}`,
+              this.formatAnalysisResultStatus(item.status),
+            ),
+          ]),
+          m(
+            'div.ai-result-picker-query',
+            item.userQuery || item.traceLabel || item.traceId,
+          ),
+          m(
+            'div.ai-result-picker-item-meta',
+            [
+              item.sceneType,
+              item.traceLabel || item.traceId,
+              this.formatAnalysisResultTime(item.createdAt),
+              item.createdBy || '',
+            ]
+              .filter(Boolean)
+              .join(' · '),
+          ),
+          m('div.ai-result-picker-coverage', [
+            `${metricCount} metrics`,
+            evidenceCount ? ` · ${evidenceCount} refs` : '',
+            ` · ${item.visibility}`,
+          ]),
+        ]),
+        m('div.ai-result-picker-item-actions', [
+          m(
+            'button.ai-result-picker-role-btn',
+            {
+              class: isBaseline ? 'active' : '',
+              onclick: () => this.selectResultBaseline(item.id),
+              title: '设为 baseline',
+            },
+            '基线',
+          ),
+          m(
+            'button.ai-result-picker-role-btn',
+            {
+              class: isCandidate ? 'active' : '',
+              disabled: isBaseline,
+              onclick: () => this.toggleResultCandidate(item.id),
+              title: isBaseline ? 'baseline 不能同时作为 candidate' : '加入候选',
+            },
+            '候选',
+          ),
+        ]),
+      ],
+    );
   }
 
   /** Render trace picker drawer for selecting a reference trace. */

@@ -199,7 +199,7 @@ function ensureLeadingSlash(value: string): string {
 
 export function buildSmartPerfettoWorkspaceApiUrl(
   backendUrl: string,
-  resource: 'traces' | 'reports' | 'agent' | 'providers',
+  resource: 'traces' | 'reports' | 'agent' | 'providers' | 'analysis-results',
   path = '',
 ): string {
   const {workspaceId} = getSmartPerfettoRequestContext();

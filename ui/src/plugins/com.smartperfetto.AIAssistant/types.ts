@@ -294,6 +294,33 @@ export interface LatestAnalysisSnapshot {
   createdAt: number;
 }
 
+/** Persisted analysis result shown by the multi-result comparison picker. */
+export interface AnalysisResultPickerItem {
+  id: string;
+  traceId: string;
+  sessionId: string;
+  runId: string;
+  reportId?: string;
+  createdBy?: string;
+  visibility: 'private' | 'workspace' | string;
+  sceneType: string;
+  title: string;
+  userQuery: string;
+  traceLabel: string;
+  status: 'ready' | 'partial' | 'failed' | string;
+  createdAt: number;
+  expiresAt?: number;
+  metrics?: Array<{
+    key: string;
+    label: string;
+    group: string;
+    value: number | string | null;
+    unit?: string;
+    confidence?: number;
+  }>;
+  evidenceRefs?: unknown[];
+}
+
 /**
  * AI panel internal state.
  */
@@ -356,6 +383,11 @@ export interface AIPanelState {
   comparisonTraceLoading: boolean; // Loading state for reference trace processor
   // Latest analysis-result snapshot for result comparison flow
   latestAnalysisSnapshot: LatestAnalysisSnapshot | null;
+  showResultPicker: boolean; // Whether analysis result picker is visible
+  resultPickerLoading: boolean; // Loading state for analysis result picker
+  resultPickerError: string | null; // Error message for analysis result picker
+  selectedResultBaselineId: string | null; // Baseline snapshot selected by result picker
+  selectedResultCandidateIds: Set<string>; // Candidate snapshots selected by result picker
   // Story Panel state
   storyState: StoryPanelState;
   /** Analysis mode toggle: 'fast' (quick path) / 'full' (pipeline) / 'auto' (classifier-driven).
