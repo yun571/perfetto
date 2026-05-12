@@ -248,6 +248,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     isReferenceActive: false,
     showTracePicker: false,
     comparisonTraceLoading: false,
+    latestAnalysisSnapshot: null,
     // Story Panel
     storyState: createStoryPanelState(),
     // Analysis mode is workspace-scoped so different workspaces keep separate
@@ -876,6 +877,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     this.state.lastQuery = '';
     this.state.currentSessionId = null;
     this.state.agentSessionId = null; // Reset Agent session for multi-turn dialogue
+    this.state.latestAnalysisSnapshot = null;
     this.clearAgentObservability();
     this.resetInterventionState();
 
@@ -1261,6 +1263,16 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
                 })
               : null,
             isInRpcMode ? m('span.ai-status-text.backend', 'RPC') : null,
+            this.state.latestAnalysisSnapshot
+              ? m(
+                  'span.ai-status-text.snapshot',
+                  {title: this.formatLatestSnapshotTitle()},
+                  [
+                    m('i.pf-icon', 'fact_check'),
+                    this.formatLatestSnapshotLabel(),
+                  ],
+                )
+              : null,
           ]),
           this.renderHeaderActions(isInRpcMode, hasBackendTrace),
         ]),
@@ -3315,6 +3327,12 @@ Click ⚙️ to configure backend connection.`;
    * - No manual sync needed as all state changes go directly to this.state
    */
   private handleSSEEvent(eventType: string, data?: any): void {
+    if (eventType === 'snapshot_created') {
+      this.applySnapshotCreatedEvent(data);
+    } else if (eventType === 'analysis_completed') {
+      this.applyAnalysisCompletedSnapshotFallback(data);
+    }
+
     const ctx = this.createSSEHandlerContext();
     const result = handleSSEEventExternal(eventType, data, ctx);
 
@@ -3333,6 +3351,80 @@ Click ⚙️ to configure backend connection.`;
 
     // Trigger redraw after handling each event
     m.redraw();
+  }
+
+  private applySnapshotCreatedEvent(data?: any): void {
+    const payload = data && typeof data === 'object' ? data.data : null;
+    if (!payload || typeof payload !== 'object') return;
+    const snapshotId =
+      typeof payload.snapshotId === 'string' ? payload.snapshotId : '';
+    if (!snapshotId) return;
+
+    this.state.latestAnalysisSnapshot = {
+      snapshotId,
+      status:
+        typeof payload.status === 'string' ? payload.status : 'partial',
+      sceneType:
+        typeof payload.sceneType === 'string' ? payload.sceneType : 'general',
+      metricCount:
+        typeof payload.metricCount === 'number' ? payload.metricCount : 0,
+      evidenceRefCount:
+        typeof payload.evidenceRefCount === 'number'
+          ? payload.evidenceRefCount
+          : 0,
+      traceId:
+        typeof payload.traceId === 'string' ? payload.traceId : undefined,
+      sessionId:
+        typeof payload.sessionId === 'string' ? payload.sessionId : undefined,
+      runId: typeof payload.runId === 'string' ? payload.runId : undefined,
+      reportId:
+        typeof payload.reportId === 'string' ? payload.reportId : undefined,
+      visibility:
+        typeof payload.visibility === 'string' ? payload.visibility : 'private',
+      createdAt:
+        typeof payload.createdAt === 'number' ? payload.createdAt : Date.now(),
+    };
+  }
+
+  private applyAnalysisCompletedSnapshotFallback(data?: any): void {
+    if (this.state.latestAnalysisSnapshot) return;
+    const payload = data && typeof data === 'object' ? data.data : null;
+    if (!payload || typeof payload !== 'object') return;
+    const snapshotId =
+      typeof payload.resultSnapshotId === 'string'
+        ? payload.resultSnapshotId
+        : '';
+    if (!snapshotId) return;
+
+    this.state.latestAnalysisSnapshot = {
+      snapshotId,
+      status: 'partial',
+      sceneType: 'general',
+      metricCount: 0,
+      evidenceRefCount: 0,
+      traceId: this.state.backendTraceId || undefined,
+      sessionId: this.state.agentSessionId || undefined,
+      runId: this.state.agentRunId || undefined,
+      visibility: 'private',
+      createdAt: Date.now(),
+    };
+  }
+
+  private formatLatestSnapshotLabel(): string {
+    const snapshot = this.state.latestAnalysisSnapshot;
+    if (!snapshot) return '';
+    return `${snapshot.status === 'ready' ? 'Ready' : 'Partial'} result`;
+  }
+
+  private formatLatestSnapshotTitle(): string {
+    const snapshot = this.state.latestAnalysisSnapshot;
+    if (!snapshot) return '';
+    return [
+      `Snapshot: ${snapshot.snapshotId}`,
+      `Scene: ${snapshot.sceneType}`,
+      `Metrics: ${snapshot.metricCount}`,
+      `Visibility: ${snapshot.visibility || 'private'}`,
+    ].join('\n');
   }
 
   private async handleCommand(input: string) {

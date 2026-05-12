@@ -279,6 +279,21 @@ export function createStoryPanelState(): StoryPanelState {
   };
 }
 
+/** Latest persisted analysis-result snapshot for the current panel/window. */
+export interface LatestAnalysisSnapshot {
+  snapshotId: string;
+  status: 'ready' | 'partial' | 'failed' | string;
+  sceneType: string;
+  metricCount: number;
+  evidenceRefCount: number;
+  traceId?: string;
+  sessionId?: string;
+  runId?: string;
+  reportId?: string;
+  visibility?: 'private' | 'workspace' | string;
+  createdAt: number;
+}
+
 /**
  * AI panel internal state.
  */
@@ -339,6 +354,8 @@ export interface AIPanelState {
   isReferenceActive: boolean; // Whether Perfetto is currently showing the reference trace
   showTracePicker: boolean; // Whether trace picker modal is visible
   comparisonTraceLoading: boolean; // Loading state for reference trace processor
+  // Latest analysis-result snapshot for result comparison flow
+  latestAnalysisSnapshot: LatestAnalysisSnapshot | null;
   // Story Panel state
   storyState: StoryPanelState;
   /** Analysis mode toggle: 'fast' (quick path) / 'full' (pipeline) / 'auto' (classifier-driven).

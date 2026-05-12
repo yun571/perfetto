@@ -603,6 +603,27 @@
     font-size: 10px;
     color: var(--chat-success);
   }
+
+  &.snapshot {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    max-width: 96px;
+    height: 18px;
+    padding: 0 5px;
+    border: 1px solid var(--chat-border);
+    border-radius: 4px;
+    background: var(--chat-bg-secondary);
+    color: var(--chat-primary);
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    .pf-icon {
+      font-size: 12px !important;
+      flex-shrink: 0;
+    }
+  }
 }
 
 .ai-workspace-chip {
