@@ -78,6 +78,10 @@ import {
   TraceDataset,
   AnalysisResultPickerItem,
   AnalysisResultWindowState,
+  AnalysisResultComparisonCell,
+  AnalysisResultComparisonDelta,
+  AnalysisResultComparisonMatrixRow,
+  AnalysisResultComparisonRun,
 } from './types';
 // Agent-Driven Architecture v2.0 - Intervention Panel
 import {
@@ -254,6 +258,8 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     showResultPicker: false,
     resultPickerLoading: false,
     resultPickerError: null,
+    resultComparisonLoading: false,
+    resultComparisonError: null,
     selectedResultBaselineId: null,
     selectedResultCandidateIds: new Set(),
     // Story Panel
@@ -893,6 +899,8 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
     this.state.showResultPicker = false;
     this.state.resultPickerLoading = false;
     this.state.resultPickerError = null;
+    this.state.resultComparisonLoading = false;
+    this.state.resultComparisonError = null;
     this.state.selectedResultBaselineId = null;
     this.state.selectedResultCandidateIds = new Set();
     this.availableAnalysisResults = [];
@@ -1063,6 +1071,7 @@ export class AIPanel implements m.ClassComponent<AIPanelAttrs> {
               active: this.state.showResultPicker,
               onclick: () => {
                 this.state.showResultPicker = true;
+                this.state.resultComparisonError = null;
                 this.state.showTracePicker = false;
                 this.state.showSessionSidebar = false;
                 this.state.showStorySidebar = false;
@@ -7658,6 +7667,7 @@ Output MUST follow this exact markdown structure:
   private async fetchAnalysisResults(): Promise<void> {
     this.state.resultPickerLoading = true;
     this.state.resultPickerError = null;
+    this.state.resultComparisonError = null;
     m.redraw();
 
     try {
@@ -7855,7 +7865,122 @@ Output MUST follow this exact markdown structure:
     }
   }
 
-  private prepareSelectedResultComparison(): void {
+  private formatComparisonNumber(value: number): string {
+    if (Number.isInteger(value)) return String(value);
+    return value.toFixed(2).replace(/\.?0+$/, '');
+  }
+
+  private formatComparisonMetricValue(
+    cell: AnalysisResultComparisonCell | undefined,
+    unit?: string,
+  ): string {
+    if (!cell || cell.value === null || cell.value === undefined) {
+      return 'missing';
+    }
+    const value =
+      typeof cell.numericValue === 'number'
+        ? cell.numericValue
+        : cell.value;
+    const formattedValue =
+      typeof value === 'number'
+        ? this.formatComparisonNumber(value)
+        : String(value);
+    const displayUnit = cell.unit || unit;
+    return displayUnit ? `${formattedValue} ${displayUnit}` : formattedValue;
+  }
+
+  private formatComparisonDelta(
+    delta: AnalysisResultComparisonDelta | undefined,
+    row: AnalysisResultComparisonMatrixRow,
+  ): string {
+    if (!delta || delta.deltaValue === null) return 'n/a';
+    const valueSign = delta.deltaValue > 0 ? '+' : '';
+    const value = `${valueSign}${this.formatComparisonNumber(delta.deltaValue)}`;
+    const pct =
+      typeof delta.deltaPct === 'number'
+        ? ` (${delta.deltaPct > 0 ? '+' : ''}${this.formatComparisonNumber(delta.deltaPct)}%)`
+        : '';
+    const unit = row.unit ? ` ${row.unit}` : '';
+    return `${value}${unit}${pct}, ${delta.assessment}`;
+  }
+
+  private escapeMarkdownTableCell(value: string): string {
+    return value.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  }
+
+  private formatComparisonResultMessage(
+    comparison: AnalysisResultComparisonRun,
+  ): string {
+    const result = comparison.result;
+    if (!result) {
+      return `**分析结果对比已创建**\n\nComparison: \`${comparison.id}\`\nStatus: ${comparison.status}`;
+    }
+
+    const matrix = result.matrix;
+    const baseline = matrix.inputSnapshots.find(
+      (item) => item.snapshotId === matrix.baselineSnapshotId,
+    );
+    const candidates = matrix.inputSnapshots.filter(
+      (item) => item.snapshotId !== matrix.baselineSnapshotId,
+    );
+    const rows = matrix.rows.slice(0, 12);
+    const tableRows = rows.map((row) => {
+      const candidateSummary = candidates
+        .map((snapshot) => {
+          const cell = row.cells.find(
+            (item) => item.snapshotId === snapshot.snapshotId,
+          );
+          const delta = row.deltas.find(
+            (item) => item.snapshotId === snapshot.snapshotId,
+          );
+          const title = snapshot.title || snapshot.traceLabel || snapshot.snapshotId;
+          return `${title}: ${this.formatComparisonMetricValue(cell, row.unit)}, Δ ${this.formatComparisonDelta(delta, row)}`;
+        })
+        .join('; ');
+      return [
+        this.escapeMarkdownTableCell(row.label || row.metricKey),
+        this.escapeMarkdownTableCell(this.formatComparisonMetricValue(row.baseline, row.unit)),
+        this.escapeMarkdownTableCell(candidateSummary || 'n/a'),
+      ];
+    });
+    const table = tableRows.length > 0
+      ? [
+          '| Metric | Baseline | Candidate values and deltas |',
+          '|---|---:|---|',
+          ...tableRows.map((row) => `| ${row[0]} | ${row[1]} | ${row[2]} |`),
+        ].join('\n')
+      : '没有可展示的 metric 行。';
+
+    const exportUrl = buildSmartPerfettoWorkspaceApiUrl(
+      this.state.settings.backendUrl,
+      'comparisons',
+      `/${encodeURIComponent(comparison.id)}/report/export`,
+    );
+    const hiddenRows = matrix.rows.length - rows.length;
+    const hiddenText = hiddenRows > 0 ? `\n\n还有 ${hiddenRows} 行未在消息中展开，完整内容见 HTML 报告。` : '';
+    const baselineTitle =
+      baseline?.title || baseline?.traceLabel || baseline?.snapshotId || 'baseline';
+    const candidateTitles = candidates
+      .map((item) => item.title || item.traceLabel || item.snapshotId)
+      .join(', ');
+
+    return [
+      '**分析结果对比已完成**',
+      '',
+      `Comparison: \`${comparison.id}\``,
+      `Baseline: ${baselineTitle}`,
+      `Candidates: ${candidateTitles || 'n/a'}`,
+      `Significant changes: ${result.significantChanges.length}`,
+      '',
+      table,
+      hiddenText,
+      '',
+      `[导出 HTML 报告](${exportUrl})`,
+    ].join('\n');
+  }
+
+  private async startSelectedResultComparison(): Promise<void> {
+    if (this.state.resultComparisonLoading) return;
     const baseline = this.availableAnalysisResults.find(
       (item) => item.id === this.state.selectedResultBaselineId,
     );
@@ -7864,19 +7989,65 @@ Output MUST follow this exact markdown structure:
     );
     if (!baseline || candidates.length === 0) return;
 
-    this.addMessage({
-      id: this.generateId(),
-      role: 'system',
-      content:
-        `已选择分析结果对比。\n\n` +
-        `- Baseline: ${baseline.title || baseline.id}\n` +
-        candidates
-          .map((item, index) => `- Candidate ${index + 1}: ${item.title || item.id}`)
-          .join('\n'),
-      timestamp: Date.now(),
-    });
-    this.state.showResultPicker = false;
+    this.state.resultComparisonLoading = true;
+    this.state.resultComparisonError = null;
     m.redraw();
+
+    try {
+      const query =
+        this.state.input.trim() ||
+        `Compare ${baseline.title || baseline.id} with ${candidates
+          .map((item) => item.title || item.id)
+          .join(', ')}`;
+      const url = buildSmartPerfettoWorkspaceApiUrl(
+        this.state.settings.backendUrl,
+        'comparisons',
+      );
+      const response = await this.fetchBackend(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          baselineSnapshotId: baseline.id,
+          candidateSnapshotIds: candidates.map((item) => item.id),
+          query,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          typeof data.error === 'string' ? data.error : `HTTP ${response.status}`;
+        throw new Error(message);
+      }
+
+      const comparison = data.comparison as AnalysisResultComparisonRun | undefined;
+      if (!comparison?.id) {
+        throw new Error('Comparison response is missing comparison.id');
+      }
+
+      if (this.state.input.trim() === query) {
+        this.state.input = '';
+      }
+      this.addMessage({
+        id: this.generateId(),
+        role: 'assistant',
+        content: this.formatComparisonResultMessage(comparison),
+        timestamp: Date.now(),
+      });
+      this.state.showResultPicker = false;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to create comparison';
+      this.state.resultComparisonError = message;
+      this.addMessage({
+        id: this.generateId(),
+        role: 'system',
+        content: `创建分析结果对比失败: ${message}`,
+        timestamp: Date.now(),
+      });
+    } finally {
+      this.state.resultComparisonLoading = false;
+      m.redraw();
+    }
   }
 
   private formatAnalysisResultTime(timestamp: number): string {
@@ -7893,6 +8064,7 @@ Output MUST follow this exact markdown structure:
   private renderResultPicker(): m.Vnode {
     const selectedCount = this.state.selectedResultCandidateIds.size;
     const canPrepare = !!this.state.selectedResultBaselineId && selectedCount > 0;
+    const comparisonLoading = this.state.resultComparisonLoading;
 
     return m('aside.ai-trace-picker-sidebar.ai-result-picker-sidebar', [
       m('div.ai-trace-picker-sidebar-header', [
@@ -7938,21 +8110,31 @@ Output MUST follow this exact markdown structure:
         ]),
         this.availableAnalysisResults.length > 0
           ? m('div.ai-trace-picker-sidebar-actions.ai-result-picker-actions', [
+              this.state.resultComparisonError
+                ? m(
+                    'span.ai-result-picker-action-error',
+                    `对比失败: ${this.state.resultComparisonError}`,
+                  )
+                : null,
               m(
                 'button.ai-result-picker-primary',
                 {
-                  disabled: !canPrepare,
-                  onclick: () => this.prepareSelectedResultComparison(),
+                  disabled: !canPrepare || comparisonLoading,
+                  onclick: () => {
+                    void this.startSelectedResultComparison();
+                  },
                 },
-                '选择完成',
+                comparisonLoading ? '对比中...' : '开始对比',
               ),
               m(
                 'button.ai-result-picker-secondary',
                 {
+                  disabled: comparisonLoading,
                   onclick: () => {
                     this.state.selectedResultBaselineId =
                       this.state.latestAnalysisSnapshot?.snapshotId ?? null;
                     this.state.selectedResultCandidateIds = new Set();
+                    this.state.resultComparisonError = null;
                     this.syncResultPickerSelection();
                     m.redraw();
                   },

@@ -334,6 +334,69 @@ export interface AnalysisResultWindowState {
   expiresAt: number;
 }
 
+export interface AnalysisResultComparisonInputSnapshot {
+  snapshotId: string;
+  traceId: string;
+  title: string;
+  traceLabel: string;
+  sceneType: string;
+  userQuery: string;
+  visibility: string;
+  createdAt: number;
+}
+
+export interface AnalysisResultComparisonCell {
+  snapshotId: string;
+  metricKey: string;
+  value: number | string | null;
+  numericValue?: number;
+  unit?: string;
+}
+
+export interface AnalysisResultComparisonDelta {
+  snapshotId: string;
+  baselineSnapshotId: string;
+  metricKey: string;
+  deltaValue: number | null;
+  deltaPct: number | null;
+  assessment: 'better' | 'worse' | 'same' | 'unknown' | string;
+}
+
+export interface AnalysisResultComparisonMatrixRow {
+  metricKey: string;
+  label: string;
+  group: string;
+  unit?: string;
+  baseline?: AnalysisResultComparisonCell;
+  cells: AnalysisResultComparisonCell[];
+  deltas: AnalysisResultComparisonDelta[];
+  missingSnapshotIds: string[];
+}
+
+export interface AnalysisResultComparisonMatrix {
+  inputSnapshots: AnalysisResultComparisonInputSnapshot[];
+  baselineSnapshotId: string;
+  rows: AnalysisResultComparisonMatrixRow[];
+}
+
+export interface AnalysisResultComparisonResult {
+  matrix: AnalysisResultComparisonMatrix;
+  significantChanges: AnalysisResultComparisonDelta[];
+  reportId?: string;
+  reportUrl?: string;
+  reportExportUrl?: string;
+}
+
+export interface AnalysisResultComparisonRun {
+  id: string;
+  inputSnapshotIds: string[];
+  baselineSnapshotId?: string;
+  query: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'needs_selection' | string;
+  result?: AnalysisResultComparisonResult;
+  error?: string;
+}
+
 /**
  * AI panel internal state.
  */
@@ -399,6 +462,8 @@ export interface AIPanelState {
   showResultPicker: boolean; // Whether analysis result picker is visible
   resultPickerLoading: boolean; // Loading state for analysis result picker
   resultPickerError: string | null; // Error message for analysis result picker
+  resultComparisonLoading: boolean; // Loading state for result comparison creation
+  resultComparisonError: string | null; // Error message for result comparison creation
   selectedResultBaselineId: string | null; // Baseline snapshot selected by result picker
   selectedResultCandidateIds: Set<string>; // Candidate snapshots selected by result picker
   // Story Panel state

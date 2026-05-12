@@ -4371,6 +4371,16 @@ tr.detail-row {
   color: var(--chat-text-muted);
 }
 
+.ai-result-picker-action-error {
+  min-width: 0;
+  flex: 1;
+  color: var(--chat-error);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ai-result-picker-error {
   padding: 20px 12px;
   display: flex;
